@@ -1,0 +1,20 @@
+{
+  "name": "Hephaestus Bridge",
+  "id": "hephaestus-bridge-dev",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": [
+    "figma"
+  ],
+  "permissions": [
+    "currentuser"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "http://localhost:7780",
+      "ws://localhost:7780"
+    ],
+    "reasoning": "Local MCP relay server communication"
+  }
+}

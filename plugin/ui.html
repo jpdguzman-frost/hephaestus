@@ -1,0 +1,571 @@
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0D0D0D;
+    color: #A0A0A0;
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.3;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #container {
+    padding: 10px 12px 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
+  }
+
+  /* ─── ASCII Art Header ─── */
+  #ascii-header {
+    white-space: pre;
+    font-size: 8px;
+    line-height: 1.15;
+    letter-spacing: 0.5px;
+    text-align: center;
+    color: #F97316;
+    transition: opacity 0.4s;
+    min-height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #ascii-header.idle {
+    color: #555;
+  }
+
+  #ascii-header.connected {
+    color: #22C55E;
+  }
+
+  /* ─── Separator ─── */
+  #separator {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #333, transparent);
+  }
+
+  /* ─── Status Bar ─── */
+  #status-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    min-height: 16px;
+  }
+
+  #dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #555;
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+
+  #dot.pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  #label {
+    flex: 1;
+    transition: opacity 0.2s;
+    color: #777;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #transport-badge {
+    font-size: 8px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: #1A1A1A;
+    color: #555;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  #transport-badge.ws { color: #22C55E; border: 1px solid #1A3A1A; }
+  #transport-badge.http { color: #F59E0B; border: 1px solid #3A2A0A; }
+  #transport-badge.off { color: #555; border: 1px solid #222; }
+
+  /* ─── Forging Glow ─── */
+  .forging #ascii-header {
+    color: #F97316;
+    text-shadow: 0 0 8px rgba(249,115,22,0.3);
+    animation: forgeGlow 2s ease-in-out infinite;
+  }
+
+  @keyframes forgeGlow {
+    0%, 100% { text-shadow: 0 0 8px rgba(249,115,22,0.2); }
+    50% { text-shadow: 0 0 16px rgba(249,115,22,0.5), 0 0 4px rgba(251,191,36,0.3); }
+  }
+
+  .forging #label { color: #F97316; }
+  .forging #separator { background: linear-gradient(to right, transparent, #F97316, transparent); }
+</style>
+
+<div id="container">
+  <div id="ascii-header" class="idle"></div>
+  <div id="separator"></div>
+  <div id="status-bar">
+    <span id="dot"></span>
+    <span id="label">Connecting...</span>
+    <span id="transport-badge" class="off">---</span>
+  </div>
+</div>
+
+<script>
+  var dot = document.getElementById("dot");
+  var label = document.getElementById("label");
+  var header = document.getElementById("ascii-header");
+  var badge = document.getElementById("transport-badge");
+  var container = document.getElementById("container");
+
+  var colors = {
+    connected: "#22C55E",
+    polling: "#F59E0B",
+    disconnected: "#EF4444",
+    forging: "#F97316"
+  };
+
+  // ─── ASCII Art Frames ──────────────────────────────────────────────────
+
+  // Idle: rotating logo frames with subtle variations
+  var idleFrames = [
+    [
+      " _  _ ___ ___ _  _   _   ___ ___ _____ _   _ ___",
+      "| || | __| _ | || | /_\\ | __/ __|_   _| | | / __|",
+      "| __ | _||  _| __ |/ _ \\| _|\\__ \\ | | | |_| \\__ \\",
+      "|_||_|___|_| |_||_/_/ \\_|_| |___/ |_|  \\___/|___/",
+      "                                                  "
+    ],
+    [
+      " _  _ ___ ___ _  _   _   ___ ___ _____ _   _ ___",
+      "| || | __| _ | || | /_\\ | __/ __|_   _| | | / __|",
+      "| __ | _||  _| __ |/ _ \\| _|\\__ \\ | | | |_| \\__ \\",
+      "|_||_|___|_| |_||_/_/ \\_|_| |___/ |_|  \\___/|___/",
+      "             ~ god of the forge ~                 "
+    ],
+    [
+      " _  _ ___ ___ _  _   _   ___ ___ _____ _   _ ___",
+      "| || | __| _ | || | /_\\ | __/ __|_   _| | | / __|",
+      "| __ | _||  _| __ |/ _ \\| _|\\__ \\ | | | |_| \\__ \\",
+      "|_||_|___|_| |_||_/_/ \\_|_| |___/ |_|  \\___/|___/",
+      "            ~ figma x claude ~                    "
+    ],
+    [
+      " _  _ ___ ___ _  _   _   ___ ___ _____ _   _ ___",
+      "| || | __| _ | || | /_\\ | __/ __|_   _| | | / __|",
+      "| __ | _||  _| __ |/ _ \\| _|\\__ \\ | | | |_| \\__ \\",
+      "|_||_|___|_| |_||_/_/ \\_|_| |___/ |_|  \\___/|___/",
+      "                                                  "
+    ]
+  ];
+
+  // Forging: hammer striking anvil, sparks flying
+  var forgingFrames = [
+    [
+      "     ,/|                 ",
+      "   ,/ /    . *     .    *",
+      " ,/  /       __|__      .",
+      "/ __/       |     |      ",
+      "|/   \\______|_____|      ",
+      "      \\  /               ",
+      "   ~~~~\\/~~~~            "
+    ],
+    [
+      "      \\      *     .     ",
+      "       \\                .",
+      "     ___\\      __|__     ",
+      "    /    \\    |     |    ",
+      "   |  *   \\__|_____|    ",
+      "    \\______/    .    *   ",
+      "   ~~~~\\/~~~~            "
+    ],
+    [
+      "              .   *   .  ",
+      "      __|    *       *  .",
+      "     /  |      __|__    *",
+      "    /   |     |  ** |    ",
+      "   | .* |____|_____|    ",
+      "    \\___/   . * . *  .  ",
+      "   ~~~/\\~~~~             "
+    ],
+    [
+      "     _/      *   .    *  ",
+      "    / /   .          .   ",
+      "   / /        __|__      ",
+      "  / /        |     |     ",
+      " |/    ______|_____|     ",
+      "      /    * .  * .   *  ",
+      "   ~~~~\\/~~~~            "
+    ],
+    [
+      "      |\\   .    *     .  ",
+      "      | \\       .   *   ",
+      "      | _\\     __|__    *",
+      "      |/   \\  |  ** |    ",
+      "   *   \\____|_|_____|    ",
+      "   .  * \\_/  . * .  * . ",
+      "   ~~~~\\/~~~~            "
+    ],
+    [
+      "           .  *  .   *   ",
+      "       __     *    .   * ",
+      "     _/  \\     __|__   . ",
+      "    |  ** \\   | *** |    ",
+      "     \\____\\__|_____|    ",
+      "     * . * .  * .  * .  ",
+      "   ~~~/\\~~~~             "
+    ]
+  ];
+
+  var currentFrame = 0;
+  var animTimer = null;
+  var isForging = false;
+  var currentTransport = null;
+
+  function startIdleAnimation() {
+    stopAnimation();
+    currentFrame = 0;
+    renderFrame(idleFrames[0]);
+    animTimer = setInterval(function() {
+      currentFrame = (currentFrame + 1) % idleFrames.length;
+      renderFrame(idleFrames[currentFrame]);
+    }, 3000);
+  }
+
+  function startForgingAnimation() {
+    stopAnimation();
+    currentFrame = 0;
+    renderFrame(forgingFrames[0]);
+    animTimer = setInterval(function() {
+      currentFrame = (currentFrame + 1) % forgingFrames.length;
+      renderFrame(forgingFrames[currentFrame]);
+    }, 350);
+  }
+
+  function stopAnimation() {
+    if (animTimer) {
+      clearInterval(animTimer);
+      animTimer = null;
+    }
+  }
+
+  function renderFrame(lines) {
+    header.textContent = lines.join("\n");
+  }
+
+  // ─── Forging Phrases ────────────────────────────────────────────────────
+  var forgingPhrases = [
+    "Heating the anvil...",
+    "Stoking the flames...",
+    "Hammering pixels...",
+    "Bending vectors...",
+    "Quenching the steel...",
+    "Sparks flying...",
+    "Tempering frames...",
+    "Folding layers...",
+    "Shaping the alloy...",
+    "Casting components...",
+    "Welding nodes...",
+    "Smelting gradients...",
+    "Grinding edges...",
+    "Firing up the crucible...",
+    "Pouring molten layout...",
+    "Forging in progress...",
+    "Anvil ringing...",
+    "Drawing the blade...",
+    "Embossing details...",
+    "Etching fine lines...",
+    "Reforging variants...",
+    "Kindling the hearth...",
+    "Striking while hot...",
+    "Tongs gripping tight...",
+    "Bellows pumping...",
+    "White-hot creation...",
+    "Twisting filigree...",
+    "Hammering harmony...",
+    "Fusing elements...",
+    "Annealing perfection...",
+    "Burnishing surfaces...",
+    "Chiseling contours...",
+    "Riveting together...",
+    "Soldering connections...",
+    "Plating with gold...",
+    "Inlaying patterns...",
+    "Wrought with care...",
+    "Smithing shadows...",
+    "Forging fire & form...",
+    "Tempering typography...",
+    "Beating into shape...",
+    "The forge glows...",
+    "Metal meeting mallet...",
+    "Crafting relentlessly...",
+    "Hephaestus at work...",
+    "Olympian effort...",
+    "Mythic precision...",
+    "Divine craftsmanship...",
+    "Volcanic intensity...",
+    "Masterwork forming..."
+  ];
+
+  var phraseInterval = null;
+  var forgingStartTime = 0;
+  var forgingHideTimer = null;
+  var MIN_FORGING_DISPLAY = 1500; // Minimum ms to show forging animation
+  var activeForgeCount = 0; // Track nested/parallel forging signals
+
+  function showForging() {
+    activeForgeCount++;
+    if (isForging) return; // Already showing
+    isForging = true;
+    forgingStartTime = Date.now();
+    container.classList.add("forging");
+    header.classList.remove("idle", "connected");
+
+    dot.style.background = colors.forging;
+    dot.classList.add("pulse");
+
+    // Cancel any pending hide
+    if (forgingHideTimer) {
+      clearTimeout(forgingHideTimer);
+      forgingHideTimer = null;
+    }
+
+    startForgingAnimation();
+    cyclePhrase();
+    phraseInterval = setInterval(cyclePhrase, 2000);
+  }
+
+  function hideForging() {
+    activeForgeCount = Math.max(0, activeForgeCount - 1);
+    if (activeForgeCount > 0) return; // Other tools still active
+
+    // Ensure minimum display time so animation is visible
+    var elapsed = Date.now() - forgingStartTime;
+    var remaining = MIN_FORGING_DISPLAY - elapsed;
+
+    if (remaining > 0) {
+      // Delay the hide so animation plays for at least MIN_FORGING_DISPLAY
+      if (!forgingHideTimer) {
+        forgingHideTimer = setTimeout(function() {
+          forgingHideTimer = null;
+          doHideForging();
+        }, remaining);
+      }
+      return;
+    }
+
+    doHideForging();
+  }
+
+  function doHideForging() {
+    if (!isForging) return;
+    isForging = false;
+    activeForgeCount = 0;
+    container.classList.remove("forging");
+    dot.classList.remove("pulse");
+
+    if (phraseInterval) {
+      clearInterval(phraseInterval);
+      phraseInterval = null;
+    }
+
+    showIdle();
+  }
+
+  function cyclePhrase() {
+    var idx = Math.floor(Math.random() * forgingPhrases.length);
+    label.textContent = forgingPhrases[idx];
+  }
+
+  function showIdle() {
+    if (currentTransport === "websocket") {
+      dot.style.background = colors.connected;
+      header.classList.remove("idle");
+      header.classList.add("connected");
+      label.textContent = "Awaiting instructions...";
+      badge.textContent = "WS";
+      badge.className = "ws";
+    } else if (currentTransport === "http") {
+      dot.style.background = colors.polling;
+      header.classList.remove("idle", "connected");
+      label.textContent = "Awaiting instructions...";
+      badge.textContent = "HTTP";
+      badge.className = "http";
+    } else {
+      dot.style.background = colors.disconnected;
+      header.classList.add("idle");
+      header.classList.remove("connected");
+      label.textContent = "Disconnected";
+      badge.textContent = "---";
+      badge.className = "off";
+    }
+    startIdleAnimation();
+  }
+
+  // Start with idle animation
+  startIdleAnimation();
+
+  // ─── Networking Bridge ──────────────────────────────────────────────────
+
+  var activeWs = null;
+
+  window.onmessage = function(event) {
+    var msg = event.data.pluginMessage;
+    if (!msg) return;
+
+    switch (msg.type) {
+      case "status":
+        updateStatus(msg);
+        break;
+      case "forging-start":
+        showForging();
+        break;
+      case "forging-stop":
+        hideForging();
+        break;
+      case "http-request":
+        handleHttpRequest(msg);
+        break;
+      case "ws-connect":
+        handleWsConnect(msg);
+        break;
+      case "ws-send":
+        handleWsSend(msg);
+        break;
+      case "ws-disconnect":
+        handleWsDisconnect();
+        break;
+    }
+  };
+
+  function updateStatus(msg) {
+    if (msg.connected) {
+      currentTransport = msg.transport;
+    } else {
+      currentTransport = null;
+    }
+    if (!isForging) {
+      showIdle();
+    }
+  }
+
+  function handleHttpRequest(msg) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(msg.method, msg.url, true);
+    xhr.timeout = msg.timeout || 10000;
+
+    if (msg.headers) {
+      for (var key in msg.headers) {
+        xhr.setRequestHeader(key, msg.headers[key]);
+      }
+    }
+
+    xhr.onload = function() {
+      parent.postMessage({
+        pluginMessage: {
+          type: "http-response",
+          requestId: msg.requestId,
+          status: xhr.status,
+          body: xhr.responseText
+        }
+      }, "*");
+    };
+
+    xhr.onerror = function() {
+      parent.postMessage({
+        pluginMessage: {
+          type: "http-response",
+          requestId: msg.requestId,
+          status: 0,
+          body: null,
+          error: "Network error"
+        }
+      }, "*");
+    };
+
+    xhr.ontimeout = function() {
+      parent.postMessage({
+        pluginMessage: {
+          type: "http-response",
+          requestId: msg.requestId,
+          status: 0,
+          body: null,
+          error: "Timeout"
+        }
+      }, "*");
+    };
+
+    if (msg.body) {
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.send(msg.body);
+    } else {
+      xhr.send();
+    }
+  }
+
+  function handleWsConnect(msg) {
+    if (activeWs) {
+      try { activeWs.close(); } catch(e) {}
+    }
+
+    try {
+      activeWs = new WebSocket(msg.url);
+
+      activeWs.onopen = function() {
+        parent.postMessage({
+          pluginMessage: { type: "ws-open" }
+        }, "*");
+      };
+
+      activeWs.onmessage = function(event) {
+        parent.postMessage({
+          pluginMessage: { type: "ws-message", data: event.data }
+        }, "*");
+      };
+
+      activeWs.onclose = function(event) {
+        activeWs = null;
+        parent.postMessage({
+          pluginMessage: { type: "ws-close", code: event.code, reason: event.reason }
+        }, "*");
+      };
+
+      activeWs.onerror = function() {
+        parent.postMessage({
+          pluginMessage: { type: "ws-error" }
+        }, "*");
+      };
+    } catch(e) {
+      parent.postMessage({
+        pluginMessage: { type: "ws-error", error: e.message }
+      }, "*");
+    }
+  }
+
+  function handleWsSend(msg) {
+    if (activeWs && activeWs.readyState === WebSocket.OPEN) {
+      activeWs.send(msg.data);
+    }
+  }
+
+  function handleWsDisconnect() {
+    if (activeWs) {
+      try { activeWs.close(1000, "plugin_closing"); } catch(e) {}
+      activeWs = null;
+    }
+  }
+</script>

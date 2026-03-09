@@ -1,0 +1,177 @@
+{
+  "validCreateNodeWithChildren": {
+    "id": "cmd-001",
+    "type": "CREATE_NODE",
+    "payload": {
+      "type": "FRAME",
+      "parentId": "0:1",
+      "name": "Card",
+      "position": { "x": 0, "y": 0 },
+      "size": { "width": 320, "height": 200 },
+      "fills": [{ "type": "solid", "color": "#FFFFFF" }],
+      "cornerRadius": 8,
+      "autoLayout": {
+        "direction": "vertical",
+        "spacing": 12,
+        "padding": { "top": 16, "right": 16, "bottom": 16, "left": 16 }
+      },
+      "children": [
+        {
+          "type": "TEXT",
+          "name": "Title",
+          "text": "Hello World",
+          "textStyle": {
+            "fontFamily": "Inter",
+            "fontWeight": 600,
+            "fontSize": 18,
+            "color": "#1A1A1A"
+          }
+        },
+        {
+          "type": "RECTANGLE",
+          "name": "Divider",
+          "size": { "width": 288 },
+          "fills": [{ "type": "solid", "color": "#E0E0E0" }]
+        }
+      ]
+    },
+    "timestamp": 1700000000000,
+    "ttl": 30000,
+    "idempotencyKey": "create-card-001",
+    "atomic": true
+  },
+  "validUpdateNode": {
+    "id": "cmd-002",
+    "type": "UPDATE_NODE",
+    "payload": {
+      "nodeId": "123:456",
+      "name": "Updated Frame",
+      "position": { "x": 100, "y": 200 },
+      "size": { "width": 400, "height": 300 },
+      "fills": [
+        { "type": "solid", "color": "#FF0000", "opacity": 0.8 },
+        {
+          "type": "linear-gradient",
+          "stops": [
+            { "position": 0, "color": "#000000" },
+            { "position": 1, "color": "#FFFFFF" }
+          ],
+          "angle": 45
+        }
+      ],
+      "opacity": 0.9,
+      "visible": true
+    },
+    "timestamp": 1700000001000,
+    "ttl": 30000
+  },
+  "validSetText": {
+    "id": "cmd-003",
+    "type": "SET_TEXT",
+    "payload": {
+      "nodeId": "123:789",
+      "text": "Hello World with styles",
+      "style": {
+        "fontFamily": "Inter",
+        "fontWeight": 400,
+        "fontSize": 16,
+        "color": "#333333"
+      },
+      "styleRanges": [
+        {
+          "start": 0,
+          "end": 5,
+          "style": { "fontWeight": 700, "color": "#000000" }
+        },
+        {
+          "start": 6,
+          "end": 11,
+          "style": { "fontWeight": 400, "textDecoration": "UNDERLINE" }
+        }
+      ]
+    },
+    "timestamp": 1700000002000,
+    "ttl": 30000,
+    "idempotencyKey": "set-text-789"
+  },
+  "validBatchUpdate": {
+    "id": "cmd-004",
+    "type": "UPDATE_NODE",
+    "payload": {
+      "nodeId": "node-1",
+      "name": "Batch Item 1",
+      "position": { "x": 0, "y": 0 }
+    },
+    "timestamp": 1700000003000,
+    "ttl": 30000,
+    "atomic": true,
+    "batchId": "batch-001",
+    "batchSeq": 0,
+    "batchTotal": 3
+  },
+  "expiredCommand": {
+    "id": "cmd-expired",
+    "type": "PING",
+    "payload": {},
+    "timestamp": 1600000000000,
+    "ttl": 1000
+  },
+  "unknownTypeCommand": {
+    "id": "cmd-unknown",
+    "type": "UNKNOWN_TYPE",
+    "payload": {},
+    "timestamp": 1700000000000,
+    "ttl": 30000
+  },
+  "invalidPayloadCommand": {
+    "id": "cmd-invalid",
+    "type": "CREATE_NODE",
+    "payload": {
+      "type": "INVALID_NODE_TYPE"
+    },
+    "timestamp": 1700000000000,
+    "ttl": 30000
+  },
+  "validSuccessResult": {
+    "id": "cmd-001",
+    "status": "success",
+    "result": {
+      "nodeId": "999:1",
+      "name": "Card",
+      "type": "FRAME"
+    },
+    "duration": 42,
+    "timestamp": 1700000000500
+  },
+  "validErrorResult": {
+    "id": "cmd-002",
+    "status": "error",
+    "error": {
+      "category": "NODE_NOT_FOUND",
+      "message": "Node 123:456 not found",
+      "retryable": false,
+      "suggestion": "Verify the nodeId is correct and the node exists on the current page."
+    },
+    "duration": 5,
+    "timestamp": 1700000001500
+  },
+  "validDeleteNodes": {
+    "id": "cmd-005",
+    "type": "DELETE_NODES",
+    "payload": {
+      "nodeIds": ["123:1", "123:2", "123:3"]
+    },
+    "timestamp": 1700000004000,
+    "ttl": 30000
+  },
+  "validExecute": {
+    "id": "cmd-006",
+    "type": "EXECUTE",
+    "payload": {
+      "code": "const sel = figma.currentPage.selection; return sel.map(n => n.name);",
+      "timeout": 5000
+    },
+    "timestamp": 1700000005000,
+    "ttl": 30000
+  }
+}

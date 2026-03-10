@@ -165,6 +165,8 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     "Long-poll for a chat message from the Figma plugin. Returns when a message arrives or after timeout. IMPORTANT: You MUST call this tool again after every response you send — it is a continuous listening loop. After timeout, call it again immediately. After receiving a message and responding with send_chat_response, call it again immediately. Never stop the loop unless the user explicitly asks you to stop listening.",
   send_chat_response:
     "Send a response message back to the Figma plugin chat interface. After calling this, you MUST call wait_for_chat again immediately to continue listening for the next message.",
+  send_chat_chunk:
+    "Send a streaming text chunk to the Figma plugin chat. Call multiple times with done:false for each chunk, then once with done:true for the final chunk. This creates a real-time typing effect in the plugin.",
 };
 
 // ─── Schema Conversion ─────────────────────────────────────────────────────

@@ -842,6 +842,14 @@ export const waitForChatSchema = z.object({
 export const sendChatResponseSchema = z.object({
   messageId: z.string(),
   message: z.string(),
+  isError: z.boolean().optional(),
+});
+
+/** send_chat_chunk — send a streaming chunk to the plugin chat */
+export const sendChatChunkSchema = z.object({
+  messageId: z.string(),
+  delta: z.string(),
+  done: z.boolean().optional(),
 });
 
 // ============================================================================
@@ -922,6 +930,7 @@ export const schemaRegistry = {
   // Chat
   wait_for_chat: waitForChatSchema,
   send_chat_response: sendChatResponseSchema,
+  send_chat_chunk: sendChatChunkSchema,
 } as const;
 
 export type ToolName = keyof typeof schemaRegistry;

@@ -51,7 +51,7 @@ export class RelayServer {
   private chatWaiters: Array<{ resolve: (msg: { id: string; message: string; selection: unknown[]; timestamp: number }) => void; timer: ReturnType<typeof setTimeout> }> = [];
 
   // Chat response queue (MCP server → plugin)
-  private chatOutbox: Array<{ id: string; message: string; timestamp: number }> = [];
+  private chatOutbox: Array<{ id: string; message: string; timestamp: number; isError?: boolean; _isChunk?: boolean; _done?: boolean }> = [];
 
   constructor(config: Config, logger: Logger) {
     this.config = config;
@@ -260,7 +260,7 @@ export class RelayServer {
    * Called by the MCP tool `send_chat_response` to push a response back to the plugin.
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
-  sendChatResponse(response: { id: string; message: string; timestamp: number }): void {
+  sendChatResponse(response: { id: string; message: string; timestamp: number; isError?: boolean }): void {
     // Push via WebSocket if connected (instant delivery)
     if (this.wsClient?.readyState === WebSocket.OPEN) {
       const msg: WsMessage = {
@@ -279,9 +279,30 @@ export class RelayServer {
   }
 
   /**
+   * Called by the MCP tool `send_chat_chunk` to push a streaming chunk to the plugin.
+   * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
+   */
+  sendChatChunk(chunk: { id: string; delta: string; done: boolean; timestamp: number }): void {
+    // Push via WebSocket if connected (instant delivery)
+    if (this.wsClient?.readyState === WebSocket.OPEN) {
+      const msg: WsMessage = {
+        type: "command",
+        id: "chat-chunk",
+        payload: { chatChunk: chunk } as unknown as Record<string, unknown>,
+        timestamp: Date.now(),
+      };
+      this.wsClient.send(JSON.stringify(msg));
+      return;
+    }
+
+    // WS not available — queue for HTTP polling
+    this.chatOutbox.push({ id: chunk.id, message: chunk.delta, timestamp: chunk.timestamp, _isChunk: true, _done: chunk.done } as typeof this.chatOutbox[number]);
+  }
+
+  /**
    * Get and drain pending chat responses for the plugin (called during HTTP polling).
    */
-  drainChatResponses(): Array<{ id: string; message: string; timestamp: number }> {
+  drainChatResponses(): Array<{ id: string; message: string; timestamp: number; isError?: boolean; _isChunk?: boolean; _done?: boolean }> {
     const responses = [...this.chatOutbox];
     this.chatOutbox = [];
     return responses;

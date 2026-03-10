@@ -175,6 +175,14 @@ function handleChatSend(msg: { type: string; id: string; message: string }): voi
     if (resp.status < 200 || resp.status >= 300) {
       console.warn("Chat send failed: " + resp.status + " " + resp.body);
     }
+
+    // Confirm to UI with selection context
+    figma.ui.postMessage({
+      type: "chat-sent-confirmation",
+      id: msg.id,
+      selectionCount: selection.length,
+      selectionSummary: selection.slice(0, 3).map(function(s) { return s.name + " (" + s.type + ")"; })
+    });
   });
 }
 

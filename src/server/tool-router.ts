@@ -114,6 +114,7 @@ const TOOL_ROUTES: Record<string, ToolRoute> = {
   // ── Chat Tools ───────────────────────────────────────────────────────────
   wait_for_chat:       { category: "local" },
   send_chat_response:  { category: "local" },
+  send_chat_chunk:     { category: "local" },
 };
 
 // ─── Handler Types ──────────────────────────────────────────────────────────
@@ -420,11 +421,13 @@ async function handleSendChatResponse(
 ): Promise<Record<string, unknown>> {
   const messageId = params["messageId"] as string;
   const message = params["message"] as string;
+  const isError = (params["isError"] as boolean | undefined) ?? false;
 
   context.relay.sendChatResponse({
     id: messageId,
     message,
     timestamp: Date.now(),
+    isError,
   });
 
   return {
@@ -434,10 +437,37 @@ async function handleSendChatResponse(
   };
 }
 
+async function handleSendChatChunk(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const messageId = params["messageId"] as string;
+  const delta = params["delta"] as string;
+  const done = (params["done"] as boolean | undefined) ?? false;
+
+  context.relay.sendChatChunk({
+    id: messageId,
+    delta,
+    done,
+    timestamp: Date.now(),
+  });
+
+  if (done) {
+    return {
+      status: "sent",
+      messageId,
+      _hint: "Final chunk delivered. Call wait_for_chat now to listen for the next message from the plugin.",
+    };
+  }
+
+  return { status: "chunk_sent", messageId };
+}
+
 const LOCAL_HANDLERS: Record<string, ToolHandler> = {
   get_status: handleGetStatus,
   wait_for_chat: handleWaitForChat,
   send_chat_response: handleSendChatResponse,
+  send_chat_chunk: handleSendChatChunk,
 };
 
 // ─── Main Router ────────────────────────────────────────────────────────────
@@ -496,8 +526,8 @@ export async function routeToolCall(
   };
 
   // Signal activity to the plugin (shows forging animation)
-  // Skip for wait_for_chat — no animation while long-polling
-  if (toolName !== "wait_for_chat") {
+  // Skip for wait_for_chat and send_chat_chunk — no animation while long-polling or streaming
+  if (toolName !== "wait_for_chat" && toolName !== "send_chat_chunk") {
     relay.signalActivity(true);
   }
 
@@ -540,7 +570,7 @@ export async function routeToolCall(
     }
   } finally {
     // Signal activity complete
-    if (toolName !== "wait_for_chat") {
+    if (toolName !== "wait_for_chat" && toolName !== "send_chat_chunk") {
       relay.signalActivity(false);
     }
   }

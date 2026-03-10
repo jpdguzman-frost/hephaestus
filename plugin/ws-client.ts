@@ -194,7 +194,22 @@ export class WSClient {
               figma.ui.postMessage({
                 type: "chat-response",
                 message: chatResp.message as string,
-                id: chatResp.id as string
+                id: chatResp.id as string,
+                isError: (chatResp.isError as boolean) || false
+              });
+            }
+            break;
+          }
+
+          // Check for chat streaming chunk
+          if (message.id === "chat-chunk" && payload) {
+            var chatChunk = payload.chatChunk as Record<string, unknown>;
+            if (chatChunk) {
+              figma.ui.postMessage({
+                type: "chat-chunk",
+                delta: chatChunk.delta as string,
+                id: chatChunk.id as string,
+                done: (chatChunk.done as boolean) || false
               });
             }
             break;

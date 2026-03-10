@@ -313,6 +313,58 @@
     border-color: #F97316;
     color: #F97316;
   }
+
+  /* ─── Markdown in Chat ─── */
+  .chat-msg code.md-inline-code {
+    background: #2A2A2A;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: #E0E0E0;
+  }
+
+  .chat-msg pre.md-code-block {
+    background: #1A1A1A;
+    border: 1px solid #2A2A2A;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin: 4px 0;
+    overflow-x: auto;
+    font-size: 10px;
+    line-height: 1.4;
+    color: #D0D0D0;
+  }
+
+  .chat-msg pre.md-code-block code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+  }
+
+  .chat-msg strong {
+    color: #E0E0E0;
+    font-weight: 600;
+  }
+
+  .chat-msg em {
+    font-style: italic;
+    color: #B0B0D0;
+  }
+
+  .chat-msg .md-bullet {
+    display: block;
+    padding-left: 8px;
+  }
+
+  /* ─── Error Messages ─── */
+  .chat-msg.error {
+    align-self: flex-start;
+    background: #2A1A1A;
+    color: #D0A0A0;
+    border-bottom-left-radius: 2px;
+    border-left: 2px solid #EF4444;
+  }
 </style>
 
 <div id="container" style="position: relative;">
@@ -671,6 +723,12 @@
       case "chat-response":
         receiveChatResponse(msg);
         break;
+      case "chat-sent-confirmation":
+        handleSentConfirmation(msg);
+        break;
+      case "chat-chunk":
+        handleChatChunk(msg);
+        break;
     }
   };
 
@@ -868,10 +926,50 @@
     }, "*");
   }
 
+  function renderMarkdown(text) {
+    // Escape HTML first
+    var escaped = text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // Code blocks (```)
+    escaped = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g, function(match, lang, code) {
+      return '<pre class="md-code-block"><code>' + code.trim() + '</code></pre>';
+    });
+
+    // Inline code (`)
+    escaped = escaped.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+
+    // Bold (**text**)
+    escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // Italic (*text*)
+    escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // Bullet lists (lines starting with - or *)
+    escaped = escaped.replace(/^[\-\*] (.+)$/gm, '<span class="md-bullet">&bull; $1</span>');
+
+    // Numbered lists
+    escaped = escaped.replace(/^\d+\. (.+)$/gm, function(match, content) {
+      return '<span class="md-bullet">' + match.charAt(0) + '. ' + content + '</span>';
+    });
+
+    // Line breaks
+    escaped = escaped.replace(/\n/g, '<br>');
+
+    return escaped;
+  }
+
   function appendChatMessage(role, text, selectionInfo) {
     var div = document.createElement("div");
     div.className = "chat-msg " + role;
-    div.textContent = text;
+
+    if (role === "assistant" || role === "error") {
+      div.innerHTML = renderMarkdown(text);
+    } else {
+      div.textContent = text;
+    }
 
     if (selectionInfo && selectionInfo.length > 0) {
       var tag = document.createElement("div");
@@ -890,6 +988,55 @@
     if (data.id && seenResponseIds[data.id]) return;
     if (data.id) seenResponseIds[data.id] = true;
     typingIndicator.classList.remove("visible");
-    appendChatMessage("assistant", data.message);
+    if (data.isError) {
+      appendChatMessage("error", data.message);
+    } else {
+      appendChatMessage("assistant", data.message);
+    }
+  }
+
+  function handleSentConfirmation(data) {
+    if (data.selectionCount > 0) {
+      // Find the last user message and add a selection tag
+      var userMsgs = chatMessages.querySelectorAll(".chat-msg.user");
+      var lastUserMsg = userMsgs[userMsgs.length - 1];
+      if (lastUserMsg) {
+        var tag = document.createElement("div");
+        tag.className = "selection-tag";
+        var summary = data.selectionSummary.join(", ");
+        if (data.selectionCount > 3) {
+          summary += " +" + (data.selectionCount - 3) + " more";
+        }
+        tag.textContent = "\u2B21 " + summary;
+        lastUserMsg.appendChild(tag);
+      }
+    }
+  }
+
+  var streamingMessages = {};
+
+  function handleChatChunk(data) {
+    if (data.id && seenResponseIds[data.id]) return;
+
+    typingIndicator.classList.remove("visible");
+
+    if (!streamingMessages[data.id]) {
+      // First chunk — create a new message div
+      var div = document.createElement("div");
+      div.className = "chat-msg assistant";
+      div.setAttribute("data-stream-id", data.id);
+      chatMessages.appendChild(div);
+      streamingMessages[data.id] = { div: div, text: "" };
+    }
+
+    var stream = streamingMessages[data.id];
+    stream.text += data.delta;
+    stream.div.innerHTML = renderMarkdown(stream.text);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    if (data.done) {
+      seenResponseIds[data.id] = true;
+      delete streamingMessages[data.id];
+    }
   }
 </script>

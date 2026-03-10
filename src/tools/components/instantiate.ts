@@ -2,7 +2,7 @@ import { v4 as uuid } from "uuid";
 import { z } from "zod";
 import type { Command, CommandResult } from "../../shared/types.js";
 import { CommandType } from "../../shared/types.js";
-import { HephaestusError, toHephaestusError } from "../../shared/errors.js";
+import { RexError, toRexError } from "../../shared/errors.js";
 import { instantiateComponentSchema } from "../schemas.js";
 import type { CommandQueue } from "../../relay/command-queue.js";
 import type { CommandsConfig } from "../../shared/config.js";
@@ -45,7 +45,7 @@ export async function instantiateComponent(
     const result: CommandResult = await ctx.commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error!.category,
         message: result.error!.message,
         retryable: result.error!.retryable,
@@ -58,6 +58,6 @@ export async function instantiateComponent(
 
     return result.result ?? { success: true };
   } catch (err) {
-    throw toHephaestusError(err, commandId);
+    throw toRexError(err, commandId);
   }
 }

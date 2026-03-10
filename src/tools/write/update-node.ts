@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { Command, CommandResult } from "../../shared/types.js";
 import { CommandType, ErrorCategory } from "../../shared/types.js";
-import { HephaestusError, toHephaestusError } from "../../shared/errors.js";
+import { RexError, toRexError } from "../../shared/errors.js";
 import type { z } from "zod";
 import type { updateNodeSchema, batchUpdateNodesSchema } from "../schemas.js";
 import type { WriteHandlerContext } from "./types.js";
@@ -69,7 +69,7 @@ export async function updateNode(
     const result: CommandResult = await context.commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error?.category ?? ErrorCategory.INTERNAL_ERROR,
         message: result.error?.message ?? "UPDATE_NODE command failed",
         retryable: result.error?.retryable ?? false,
@@ -82,7 +82,7 @@ export async function updateNode(
 
     return result.result ?? {};
   } catch (err) {
-    throw toHephaestusError(err, commandId);
+    throw toRexError(err, commandId);
   }
 }
 
@@ -127,7 +127,7 @@ export async function batchUpdateNodes(
     const errors = results.filter((r) => r.status === "error");
     if (errors.length > 0) {
       const firstError = errors[0]!.error;
-      throw new HephaestusError({
+      throw new RexError({
         category: firstError?.category ?? ErrorCategory.INTERNAL_ERROR,
         message: `Batch update failed: ${errors.length}/${batchTotal} operations failed. First error: ${firstError?.message ?? "Unknown"}`,
         retryable: firstError?.retryable ?? false,
@@ -142,6 +142,6 @@ export async function batchUpdateNodes(
       updates: results.map((r) => r.result ?? {}),
     };
   } catch (err) {
-    throw toHephaestusError(err);
+    throw toRexError(err);
   }
 }

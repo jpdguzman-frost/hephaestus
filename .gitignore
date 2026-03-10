@@ -3,4 +3,4 @@ dist/
 plugin/code.js
 *.DS_Store
 .claude/
-hephaestus.config.json
+rex.config.json

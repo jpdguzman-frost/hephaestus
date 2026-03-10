@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { Command, CommandResult } from "../../shared/types.js";
 import { CommandType, ErrorCategory } from "../../shared/types.js";
-import { HephaestusError, toHephaestusError } from "../../shared/errors.js";
+import { RexError, toRexError } from "../../shared/errors.js";
 import type { z } from "zod";
 import type {
   createPageSchema,
@@ -47,7 +47,7 @@ async function sendPageCommand(
     const result: CommandResult = await context.commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error?.category ?? ErrorCategory.INTERNAL_ERROR,
         message: result.error?.message ?? `${errorLabel} command failed`,
         retryable: result.error?.retryable ?? false,
@@ -60,7 +60,7 @@ async function sendPageCommand(
 
     return result.result ?? {};
   } catch (err) {
-    throw toHephaestusError(err, commandId);
+    throw toRexError(err, commandId);
   }
 }
 

@@ -1,38 +1,38 @@
 import { describe, it, expect } from "vitest";
 import {
-  HephaestusError,
+  RexError,
   connectionError,
   figmaApiError,
   validationError,
   internalError,
-  toHephaestusError,
+  toRexError,
 } from "../../shared/errors.js";
 import { ErrorCategory } from "../../shared/types.js";
 
-// ─── HephaestusError Class ──────────────────────────────────────────────────
+// ─── RexError Class ──────────────────────────────────────────────────
 
-describe("HephaestusError", () => {
+describe("RexError", () => {
   it("extends Error", () => {
-    const err = new HephaestusError({
+    const err = new RexError({
       category: ErrorCategory.INTERNAL_ERROR,
       message: "test error",
       retryable: false,
     });
     expect(err).toBeInstanceOf(Error);
-    expect(err).toBeInstanceOf(HephaestusError);
+    expect(err).toBeInstanceOf(RexError);
   });
 
-  it("has name set to 'HephaestusError'", () => {
-    const err = new HephaestusError({
+  it("has name set to 'RexError'", () => {
+    const err = new RexError({
       category: ErrorCategory.INTERNAL_ERROR,
       message: "test",
       retryable: false,
     });
-    expect(err.name).toBe("HephaestusError");
+    expect(err.name).toBe("RexError");
   });
 
   it("stores all provided fields", () => {
-    const err = new HephaestusError({
+    const err = new RexError({
       category: ErrorCategory.NODE_NOT_FOUND,
       message: "Node not found",
       retryable: false,
@@ -53,7 +53,7 @@ describe("HephaestusError", () => {
 
   it("supports cause chain", () => {
     const cause = new Error("root cause");
-    const err = new HephaestusError({
+    const err = new RexError({
       category: ErrorCategory.INTERNAL_ERROR,
       message: "wrapper",
       retryable: false,
@@ -65,9 +65,9 @@ describe("HephaestusError", () => {
 
 // ─── Error Serialization ────────────────────────────────────────────────────
 
-describe("HephaestusError.toResponse()", () => {
+describe("RexError.toResponse()", () => {
   it("serializes to the SPEC.md section 5.2 format", () => {
-    const err = new HephaestusError({
+    const err = new RexError({
       category: ErrorCategory.NODE_NOT_FOUND,
       message: "Node 123:456 not found",
       retryable: false,
@@ -89,7 +89,7 @@ describe("HephaestusError.toResponse()", () => {
   });
 
   it("omits optional fields when not set", () => {
-    const err = new HephaestusError({
+    const err = new RexError({
       category: ErrorCategory.INTERNAL_ERROR,
       message: "Something broke",
       retryable: false,
@@ -109,7 +109,7 @@ describe("HephaestusError.toResponse()", () => {
   });
 
   it("includes figmaError and nodeId when set", () => {
-    const err = new HephaestusError({
+    const err = new RexError({
       category: ErrorCategory.INVALID_OPERATION,
       message: "Cannot resize",
       retryable: false,
@@ -123,7 +123,7 @@ describe("HephaestusError.toResponse()", () => {
   });
 
   it("always includes category, message, and retryable", () => {
-    const err = new HephaestusError({
+    const err = new RexError({
       category: ErrorCategory.COMMAND_TIMEOUT,
       message: "Timed out",
       retryable: true,
@@ -288,35 +288,35 @@ describe("internalError factory", () => {
   });
 });
 
-// ─── toHephaestusError ──────────────────────────────────────────────────────
+// ─── toRexError ──────────────────────────────────────────────────────
 
-describe("toHephaestusError", () => {
-  it("returns HephaestusError instances unchanged", () => {
+describe("toRexError", () => {
+  it("returns RexError instances unchanged", () => {
     const original = validationError("test");
-    const result = toHephaestusError(original);
+    const result = toRexError(original);
     expect(result).toBe(original);
   });
 
-  it("attaches commandId to HephaestusError if not already set", () => {
+  it("attaches commandId to RexError if not already set", () => {
     const original = validationError("test");
-    const result = toHephaestusError(original, "cmd-new");
+    const result = toRexError(original, "cmd-new");
     expect(result.commandId).toBe("cmd-new");
     // Should be a new instance since commandId was added
     expect(result).not.toBe(original);
   });
 
-  it("preserves existing commandId on HephaestusError", () => {
+  it("preserves existing commandId on RexError", () => {
     const original = validationError("test", { commandId: "cmd-existing" });
-    const result = toHephaestusError(original, "cmd-new");
+    const result = toRexError(original, "cmd-new");
     expect(result.commandId).toBe("cmd-existing");
     expect(result).toBe(original);
   });
 
   it("wraps plain Error as internalError", () => {
     const plainError = new Error("plain error");
-    const result = toHephaestusError(plainError);
+    const result = toRexError(plainError);
 
-    expect(result).toBeInstanceOf(HephaestusError);
+    expect(result).toBeInstanceOf(RexError);
     expect(result.category).toBe(ErrorCategory.INTERNAL_ERROR);
     expect(result.message).toBe("plain error");
     expect(result.retryable).toBe(false);
@@ -324,19 +324,19 @@ describe("toHephaestusError", () => {
   });
 
   it("wraps string errors", () => {
-    const result = toHephaestusError("something broke");
-    expect(result).toBeInstanceOf(HephaestusError);
+    const result = toRexError("something broke");
+    expect(result).toBeInstanceOf(RexError);
     expect(result.message).toBe("something broke");
   });
 
   it("wraps non-Error objects", () => {
-    const result = toHephaestusError({ code: 500 });
-    expect(result).toBeInstanceOf(HephaestusError);
+    const result = toRexError({ code: 500 });
+    expect(result).toBeInstanceOf(RexError);
     expect(result.category).toBe(ErrorCategory.INTERNAL_ERROR);
   });
 
   it("attaches commandId to wrapped errors", () => {
-    const result = toHephaestusError(new Error("oops"), "cmd-456");
+    const result = toRexError(new Error("oops"), "cmd-456");
     expect(result.commandId).toBe("cmd-456");
   });
 });

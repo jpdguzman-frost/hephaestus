@@ -1,6 +1,6 @@
-# Hephaestus — Tool API Reference
+# Rex — Tool API Reference
 
-> Complete tool definitions for the Hephaestus MCP server.
+> Complete tool definitions for the Rex MCP server.
 > All tools use JSON Schema for input validation via Zod.
 
 ---
@@ -1035,7 +1035,7 @@ Run arbitrary JavaScript in Figma's plugin context. Escape hatch for operations 
 
 ### `get_status`
 
-Get Hephaestus connection status and health.
+Get Rex connection status and health.
 
 No parameters.
 

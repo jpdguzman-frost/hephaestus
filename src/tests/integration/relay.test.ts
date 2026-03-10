@@ -184,7 +184,7 @@ describe("RelayServer Integration", () => {
           "X-Auth-Token": authSecret,
         },
         body: JSON.stringify({
-          pluginId: "hephaestus-bridge-dev",
+          pluginId: "rex-bridge-dev",
           fileKey: "abc123",
           fileName: "Design.fig",
         }),

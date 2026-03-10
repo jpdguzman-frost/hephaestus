@@ -1,4 +1,4 @@
-# Hephaestus — Plugin Communication Protocol
+# Rex — Plugin Communication Protocol
 
 > Defines the wire format, command execution model, and plugin implementation
 > requirements for the Figma relay plugin.
@@ -390,10 +390,10 @@ interface SerializedNode {
 
 ### 5.2 Color Serialization
 
-Figma uses `{ r: number, g: number, b: number }` (0-1 range). Hephaestus converts:
+Figma uses `{ r: number, g: number, b: number }` (0-1 range). Rex converts:
 
 ```typescript
-// Figma → Hephaestus
+// Figma → Rex
 function colorToHex(color: RGB, opacity?: number): string {
   const r = Math.round(color.r * 255).toString(16).padStart(2, "0");
   const g = Math.round(color.g * 255).toString(16).padStart(2, "0");
@@ -405,7 +405,7 @@ function colorToHex(color: RGB, opacity?: number): string {
   return `#${r}${g}${b}`.toUpperCase();
 }
 
-// Hephaestus → Figma
+// Rex → Figma
 function hexToColor(hex: string): { color: RGB; opacity: number } {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.slice(0, 2), 16) / 255;
@@ -419,7 +419,7 @@ function hexToColor(hex: string): { color: RGB; opacity: number } {
 ### 5.3 Auto-Layout Serialization
 
 ```typescript
-// Figma → Hephaestus
+// Figma → Rex
 function serializeAutoLayout(node: FrameNode): SerializedAutoLayout | undefined {
   if (node.layoutMode === "NONE") return undefined;
   return {
@@ -439,7 +439,7 @@ function serializeAutoLayout(node: FrameNode): SerializedAutoLayout | undefined 
   };
 }
 
-// Hephaestus → Figma
+// Rex → Figma
 function applyAutoLayout(node: FrameNode, params: AutoLayoutParams): void {
   if (params.enabled === false) {
     node.layoutMode = "NONE";
@@ -572,7 +572,7 @@ async function ensureFont(node: TextNode, fontName?: FontName): Promise<void> {
 
 ### 6.3 Font Name Resolution
 
-Hephaestus accepts simplified font specifications and resolves them:
+Rex accepts simplified font specifications and resolves them:
 
 ```typescript
 // Input: { fontFamily: "Inter", fontWeight: 700 }
@@ -904,8 +904,8 @@ plugin/
 
 ```json
 {
-  "name": "Hephaestus Bridge",
-  "id": "hephaestus-bridge-dev",
+  "name": "Rex Bridge",
+  "id": "rex-bridge-dev",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",

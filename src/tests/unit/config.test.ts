@@ -9,13 +9,13 @@ import { randomBytes } from "node:crypto";
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function createTempDir(): string {
-  const dir = join(tmpdir(), "hephaestus-test-" + randomBytes(6).toString("hex"));
+  const dir = join(tmpdir(), "rex-test-" + randomBytes(6).toString("hex"));
   mkdirSync(dir, { recursive: true });
   return dir;
 }
 
 function writeConfigFile(dir: string, config: Record<string, unknown>): string {
-  const filePath = join(dir, "hephaestus.config.json");
+  const filePath = join(dir, "rex.config.json");
   writeFileSync(filePath, JSON.stringify(config));
   return filePath;
 }

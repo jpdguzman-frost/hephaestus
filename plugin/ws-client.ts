@@ -201,6 +201,16 @@ export class WSClient {
             break;
           }
 
+          // Check for chat listening state signal
+          if (message.id === "chat-listening" && payload) {
+            if (payload.listening === true) {
+              figma.ui.postMessage({ type: "chat-available" });
+            } else {
+              figma.ui.postMessage({ type: "chat-unavailable" });
+            }
+            break;
+          }
+
           // Check for chat streaming chunk
           if (message.id === "chat-chunk" && payload) {
             var chatChunk = payload.chatChunk as Record<string, unknown>;

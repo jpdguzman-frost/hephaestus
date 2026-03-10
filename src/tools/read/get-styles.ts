@@ -12,7 +12,7 @@ import type { CommandQueue } from "../../relay/command-queue.js";
 import type { Config } from "../../shared/config.js";
 import { getFile } from "../../rest-api/files.js";
 import type { FigmaStyleMeta } from "../../rest-api/files.js";
-import { HephaestusError, figmaApiError, internalError } from "../../shared/errors.js";
+import { RexError, figmaApiError, internalError } from "../../shared/errors.js";
 import { ErrorCategory } from "../../shared/types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ export async function getStyles(
       count: filteredStyles.length,
     };
   } catch (err) {
-    if (err instanceof HephaestusError) throw err;
+    if (err instanceof RexError) throw err;
     throw internalError(
       `Failed to fetch styles: ${err instanceof Error ? err.message : String(err)}`,
       { cause: err },

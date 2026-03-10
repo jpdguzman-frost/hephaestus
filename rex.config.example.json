@@ -1,0 +1,28 @@
+{
+  "relay": {
+    "port": 7780,
+    "host": "127.0.0.1"
+  },
+  "polling": {
+    "defaultInterval": 300,
+    "burstInterval": 100,
+    "idleInterval": 500,
+    "idleThreshold": 10000
+  },
+  "websocket": {
+    "enabled": true,
+    "heartbeatInterval": 5000,
+    "heartbeatTimeout": 3000,
+    "reconnectBackoff": [500, 1000, 2000, 4000, 8000, 15000]
+  },
+  "commands": {
+    "defaultTtl": 30000,
+    "maxRetries": 1,
+    "maxConcurrent": 10,
+    "maxPerSecond": 100
+  },
+  "figma": {
+    "personalAccessToken": "YOUR_FIGMA_PAT_HERE",
+    "preloadFonts": ["Inter", "Plus Jakarta Sans"]
+  }
+}

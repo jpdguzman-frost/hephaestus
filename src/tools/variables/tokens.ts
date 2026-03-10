@@ -2,7 +2,7 @@ import { v4 as uuid } from "uuid";
 import { z } from "zod";
 import type { Command, CommandResult } from "../../shared/types.js";
 import { CommandType } from "../../shared/types.js";
-import { HephaestusError, toHephaestusError } from "../../shared/errors.js";
+import { RexError, toRexError } from "../../shared/errors.js";
 import { setupDesignTokensSchema } from "../schemas.js";
 import type { ToolContext } from "../components/instantiate.js";
 
@@ -36,7 +36,7 @@ export async function setupDesignTokens(
     const result: CommandResult = await ctx.commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error!.category,
         message: result.error!.message,
         retryable: result.error!.retryable,
@@ -49,6 +49,6 @@ export async function setupDesignTokens(
 
     return result.result ?? { success: true };
   } catch (err) {
-    throw toHephaestusError(err, commandId);
+    throw toRexError(err, commandId);
   }
 }

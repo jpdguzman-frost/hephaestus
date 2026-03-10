@@ -10,7 +10,7 @@ import type { FigmaClient } from "../../rest-api/client.js";
 export interface WriteHandlerContext {
   /** Command queue for sending commands to the Figma plugin. */
   commandQueue: CommandQueue;
-  /** Loaded Hephaestus config. */
+  /** Loaded Rex config. */
   config: Config;
   /** REST API client for direct Figma API calls (comments, etc.). */
   restApiClient: FigmaClient;

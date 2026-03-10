@@ -2,7 +2,7 @@ import { v4 as uuid } from "uuid";
 import { z } from "zod";
 import { CommandType } from "../../shared/types.js";
 import type { Command, CommandResult } from "../../shared/types.js";
-import { HephaestusError, toHephaestusError } from "../../shared/errors.js";
+import { RexError, toRexError } from "../../shared/errors.js";
 import { setLayoutGridSchema } from "../schemas.js";
 import type { ToolContext } from "../types.js";
 
@@ -38,7 +38,7 @@ export async function setLayoutGrid(
     const result: CommandResult = await ctx.commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error!.category,
         message: result.error!.message,
         retryable: result.error!.retryable,
@@ -56,6 +56,6 @@ export async function setLayoutGrid(
       ...result.result,
     };
   } catch (err) {
-    throw toHephaestusError(err, commandId);
+    throw toRexError(err, commandId);
   }
 }

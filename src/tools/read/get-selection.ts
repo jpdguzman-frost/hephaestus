@@ -13,7 +13,7 @@ import type { CommandQueue } from "../../relay/command-queue.js";
 import type { Config } from "../../shared/config.js";
 import type { Command, CommandResult } from "../../shared/types.js";
 import { CommandType, ErrorCategory } from "../../shared/types.js";
-import { HephaestusError, internalError } from "../../shared/errors.js";
+import { RexError, internalError } from "../../shared/errors.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ export async function getSelection(
     const result: CommandResult = await commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error?.category ?? ErrorCategory.INTERNAL_ERROR,
         message: result.error?.message ?? "Plugin returned an error for get_selection",
         retryable: result.error?.retryable ?? false,
@@ -65,7 +65,7 @@ export async function getSelection(
 
     return result.result ?? { nodes: [] };
   } catch (err) {
-    if (err instanceof HephaestusError) throw err;
+    if (err instanceof RexError) throw err;
     throw internalError(
       `Failed to get selection: ${err instanceof Error ? err.message : String(err)}`,
       { commandId: command.id, cause: err },

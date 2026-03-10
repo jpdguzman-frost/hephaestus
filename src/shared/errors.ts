@@ -3,10 +3,10 @@ import { ErrorCategory } from "./types.js";
 // ─── Error Class ─────────────────────────────────────────────────────────────
 
 /**
- * Structured error for all Hephaestus operations.
+ * Structured error for all Rex operations.
  * Carries category, retryable flag, and optional suggestion for the AI client.
  */
-export class HephaestusError extends Error {
+export class RexError extends Error {
   public readonly category: ErrorCategory;
   public readonly retryable: boolean;
   public readonly suggestion?: string;
@@ -25,7 +25,7 @@ export class HephaestusError extends Error {
     cause?: unknown;
   }) {
     super(options.message, { cause: options.cause });
-    this.name = "HephaestusError";
+    this.name = "RexError";
     this.category = options.category;
     this.retryable = options.retryable;
     this.suggestion = options.suggestion;
@@ -78,8 +78,8 @@ export function connectionError(
     suggestion?: string;
     cause?: unknown;
   },
-): HephaestusError {
-  return new HephaestusError({
+): RexError {
+  return new RexError({
     category: options?.category ?? ErrorCategory.CONNECTION_LOST,
     message,
     retryable: true,
@@ -105,11 +105,11 @@ export function figmaApiError(
     suggestion?: string;
     cause?: unknown;
   },
-): HephaestusError {
+): RexError {
   const category = options?.category ?? ErrorCategory.INVALID_OPERATION;
   const retryable = options?.retryable ?? category === ErrorCategory.FONT_NOT_LOADED;
 
-  return new HephaestusError({
+  return new RexError({
     category,
     message,
     retryable,
@@ -130,8 +130,8 @@ export function validationError(
     suggestion?: string;
     cause?: unknown;
   },
-): HephaestusError {
-  return new HephaestusError({
+): RexError {
+  return new RexError({
     category: options?.category ?? ErrorCategory.INVALID_PARAMS,
     message,
     retryable: false,
@@ -141,7 +141,7 @@ export function validationError(
   });
 }
 
-/** Create an internal error (bug in Hephaestus, never retryable). */
+/** Create an internal error (bug in Rex, never retryable). */
 export function internalError(
   message: string,
   options?: {
@@ -150,8 +150,8 @@ export function internalError(
     suggestion?: string;
     cause?: unknown;
   },
-): HephaestusError {
-  return new HephaestusError({
+): RexError {
+  return new RexError({
     category: options?.category ?? ErrorCategory.INTERNAL_ERROR,
     message,
     retryable: false,
@@ -162,13 +162,13 @@ export function internalError(
 }
 
 /**
- * Convert any unknown error into a HephaestusError.
- * Preserves HephaestusError instances, wraps everything else.
+ * Convert any unknown error into a RexError.
+ * Preserves RexError instances, wraps everything else.
  */
-export function toHephaestusError(err: unknown, commandId?: string): HephaestusError {
-  if (err instanceof HephaestusError) {
+export function toRexError(err: unknown, commandId?: string): RexError {
+  if (err instanceof RexError) {
     if (commandId && !err.commandId) {
-      return new HephaestusError({
+      return new RexError({
         category: err.category,
         message: err.message,
         retryable: err.retryable,

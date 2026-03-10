@@ -3,7 +3,7 @@ import { CommandQueue } from "../../relay/command-queue.js";
 import { CommandStatus, CommandType, ErrorCategory } from "../../shared/types.js";
 import type { Command, CommandResult } from "../../shared/types.js";
 import type { CommandsConfig } from "../../shared/config.js";
-import { HephaestusError } from "../../shared/errors.js";
+import { RexError } from "../../shared/errors.js";
 import type { Logger } from "../../shared/logger.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -251,7 +251,7 @@ describe("CommandQueue", () => {
       // Advance time past the TTL
       vi.advanceTimersByTime(3000);
 
-      await expect(promise).rejects.toThrow(HephaestusError);
+      await expect(promise).rejects.toThrow(RexError);
       await expect(promise).rejects.toMatchObject({
         category: ErrorCategory.COMMAND_TIMEOUT,
         retryable: false,
@@ -282,7 +282,7 @@ describe("CommandQueue", () => {
       // First timeout triggers retry, second timeout after retry triggers failure
       vi.advanceTimersByTime(7000);
 
-      await expect(promise).rejects.toThrow(HephaestusError);
+      await expect(promise).rejects.toThrow(RexError);
     });
 
     it("uses defaultTtl when command has no ttl set", async () => {
@@ -296,7 +296,7 @@ describe("CommandQueue", () => {
 
       vi.advanceTimersByTime(3000);
 
-      await expect(promise).rejects.toThrow(HephaestusError);
+      await expect(promise).rejects.toThrow(RexError);
     });
   });
 
@@ -359,7 +359,7 @@ describe("CommandQueue", () => {
       // Second timeout -> should fail (maxRetries = 1)
       queue.timeout(cmd.id);
 
-      await expect(promise).rejects.toThrow(HephaestusError);
+      await expect(promise).rejects.toThrow(RexError);
       await expect(promise).rejects.toMatchObject({
         category: ErrorCategory.COMMAND_TIMEOUT,
         retryable: false,
@@ -380,7 +380,7 @@ describe("CommandQueue", () => {
       queue.markSent(cmd.id);
       queue.timeout(cmd.id);
 
-      expect(handler).toHaveBeenCalledWith(cmd.id, expect.any(HephaestusError));
+      expect(handler).toHaveBeenCalledWith(cmd.id, expect.any(RexError));
     });
 
     it("clears sentAt and acknowledgedAt on retry", () => {
@@ -412,7 +412,7 @@ describe("CommandQueue", () => {
       }
 
       // The 6th should throw
-      expect(() => queue.enqueue(createCommand())).toThrow(HephaestusError);
+      expect(() => queue.enqueue(createCommand())).toThrow(RexError);
       expect(() => queue.enqueue(createCommand())).toThrow(/Rate limit exceeded/);
     });
 
@@ -427,9 +427,9 @@ describe("CommandQueue", () => {
         queue.enqueue(createCommand());
         expect.fail("Should have thrown");
       } catch (err) {
-        expect(err).toBeInstanceOf(HephaestusError);
-        expect((err as HephaestusError).retryable).toBe(true);
-        expect((err as HephaestusError).category).toBe(ErrorCategory.INTERNAL_ERROR);
+        expect(err).toBeInstanceOf(RexError);
+        expect((err as RexError).retryable).toBe(true);
+        expect((err as RexError).category).toBe(ErrorCategory.INTERNAL_ERROR);
       }
     });
 
@@ -442,7 +442,7 @@ describe("CommandQueue", () => {
       queue.enqueue(createCommand());
 
       // Should reject now
-      expect(() => queue.enqueue(createCommand())).toThrow(HephaestusError);
+      expect(() => queue.enqueue(createCommand())).toThrow(RexError);
 
       // Advance past the 1-second window
       vi.advanceTimersByTime(1100);
@@ -464,7 +464,7 @@ describe("CommandQueue", () => {
         queue.enqueue(createCommand());
       }
 
-      expect(() => queue.enqueue(createCommand())).toThrow(HephaestusError);
+      expect(() => queue.enqueue(createCommand())).toThrow(RexError);
       expect(() => queue.enqueue(createCommand())).toThrow(/Max concurrent commands reached/);
     });
 
@@ -479,8 +479,8 @@ describe("CommandQueue", () => {
         queue.enqueue(createCommand());
         expect.fail("Should have thrown");
       } catch (err) {
-        expect(err).toBeInstanceOf(HephaestusError);
-        expect((err as HephaestusError).retryable).toBe(true);
+        expect(err).toBeInstanceOf(RexError);
+        expect((err as RexError).retryable).toBe(true);
       }
     });
 

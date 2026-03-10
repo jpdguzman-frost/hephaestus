@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ConnectionState } from "../shared/types.js";
-import { HephaestusError } from "../shared/errors.js";
+import { RexError } from "../shared/errors.js";
 import { ErrorCategory } from "../shared/types.js";
 import type { Logger } from "../shared/logger.js";
 
@@ -93,11 +93,11 @@ export class ConnectionManager {
 
   /**
    * Validate the X-Auth-Token header.
-   * Throws HephaestusError if invalid.
+   * Throws RexError if invalid.
    */
   validateAuth(token: string | undefined): void {
     if (!token || token !== this.authSecret) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.INVALID_PARAMS,
         message: "Invalid or missing authentication token",
         retryable: false,
@@ -153,7 +153,7 @@ export class ConnectionManager {
    */
   upgradeToWebSocket(sessionId: string): void {
     if (!this._session || this._session.sessionId !== sessionId) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.INVALID_PARAMS,
         message: "Invalid session ID for WebSocket upgrade",
         retryable: false,
@@ -221,7 +221,7 @@ export class ConnectionManager {
    */
   validatePluginId(pluginId: string | undefined): void {
     if (!this._session) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.PLUGIN_NOT_RUNNING,
         message: "No plugin session active",
         retryable: true,
@@ -229,7 +229,7 @@ export class ConnectionManager {
       });
     }
     if (pluginId && pluginId !== this._session.pluginId) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.INVALID_PARAMS,
         message: "Plugin ID mismatch",
         retryable: false,

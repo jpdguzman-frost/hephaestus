@@ -121,6 +121,9 @@ export class Poller {
   private idleThreshold = 10000;
   private lastCommandTime = 0;
 
+  // Chat listening state tracking
+  private lastChatListening = false;
+
   // Connection health tracking
   private consecutiveErrors = 0;
   private maxConsecutiveErrors = 5;
@@ -270,6 +273,13 @@ export class Poller {
           figma.ui.postMessage({ type: "forging-stop" });
         }
 
+        // Forward chat listening state to UI (only on change)
+        var chatListeningNow = data.chatListening === true;
+        if (chatListeningNow !== this.lastChatListening) {
+          this.lastChatListening = chatListeningNow;
+          figma.ui.postMessage({ type: chatListeningNow ? "chat-available" : "chat-unavailable" });
+        }
+
         // Forward chat responses to UI
         var chatResponses = data.chatResponses as Array<{ id: string; message: string }> | undefined;
         if (chatResponses && chatResponses.length > 0) {
@@ -306,6 +316,13 @@ export class Poller {
               }
             }
           }
+        }
+      } else if (resp.status >= 200 && resp.status < 300 && !resp.body) {
+        // 204 No Content — nothing happening, reset chat listening if needed
+        this.consecutiveErrors = 0;
+        if (this.lastChatListening) {
+          this.lastChatListening = false;
+          figma.ui.postMessage({ type: "chat-unavailable" });
         }
       } else if (resp.status === 503) {
         // Session lost (server disconnected us, e.g., missed polls during command execution)

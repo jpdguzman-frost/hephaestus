@@ -14,7 +14,7 @@ import type { CommandQueue } from "../../relay/command-queue.js";
 import type { Config } from "../../shared/config.js";
 import { getFile, getFileNodes } from "../../rest-api/files.js";
 import type { FigmaNode } from "../../rest-api/files.js";
-import { HephaestusError, figmaApiError, internalError } from "../../shared/errors.js";
+import { RexError, figmaApiError, internalError } from "../../shared/errors.js";
 import { ErrorCategory } from "../../shared/types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -181,7 +181,7 @@ export async function getPage(
       pages,
     };
   } catch (err) {
-    if (err instanceof HephaestusError) throw err;
+    if (err instanceof RexError) throw err;
     throw internalError(
       `Failed to fetch page data: ${err instanceof Error ? err.message : String(err)}`,
       { cause: err },

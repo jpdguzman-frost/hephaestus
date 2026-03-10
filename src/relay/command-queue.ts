@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { Command, CommandResult } from "../shared/types.js";
 import { CommandStatus, ErrorCategory } from "../shared/types.js";
-import { HephaestusError } from "../shared/errors.js";
+import { RexError } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import type { CommandsConfig } from "../shared/config.js";
 
@@ -20,7 +20,7 @@ export interface QueuedCommand {
   /** Promise resolve callback for callers waiting on this command. */
   resolve?: (result: CommandResult) => void;
   /** Promise reject callback for callers waiting on this command. */
-  reject?: (error: HephaestusError) => void;
+  reject?: (error: RexError) => void;
 }
 
 /** Events emitted by the command queue. */
@@ -31,7 +31,7 @@ export interface CommandQueueEvents {
   completed: (commandId: string, result: CommandResult) => void;
   timeout: (commandId: string) => void;
   retry: (commandId: string, attempt: number) => void;
-  failed: (commandId: string, error: HephaestusError) => void;
+  failed: (commandId: string, error: RexError) => void;
   expired: (commandId: string) => void;
 }
 
@@ -136,7 +136,7 @@ export class CommandQueue extends EventEmitter {
   enqueue(command: Command): Promise<CommandResult> {
     // Rate limiting check
     if (!this.rateLimiter.tryAcquire()) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.INTERNAL_ERROR,
         message: "Rate limit exceeded: max " + this.config.maxPerSecond + " commands/sec",
         retryable: true,
@@ -148,7 +148,7 @@ export class CommandQueue extends EventEmitter {
     // Concurrent pending check
     const pendingCount = this.getPending().length + this.getInFlight().length;
     if (pendingCount >= this.config.maxConcurrent) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.INTERNAL_ERROR,
         message: "Max concurrent commands reached: " + this.config.maxConcurrent,
         retryable: true,
@@ -272,7 +272,7 @@ export class CommandQueue extends EventEmitter {
     if (entry.retryCount < this.config.maxRetries) {
       this.retry(id);
     } else {
-      this.fail(id, new HephaestusError({
+      this.fail(id, new RexError({
         category: ErrorCategory.COMMAND_TIMEOUT,
         message: "Command timed out after " + entry.command.ttl + "ms (retries exhausted)",
         retryable: false,
@@ -314,7 +314,7 @@ export class CommandQueue extends EventEmitter {
   }
 
   /** Permanently fail a command. */
-  private fail(id: string, error: HephaestusError): void {
+  private fail(id: string, error: RexError): void {
     const entry = this.queue.get(id);
     if (!entry) return;
 
@@ -394,7 +394,7 @@ export class CommandQueue extends EventEmitter {
           type: entry.command.type,
           age,
         });
-        entry.reject?.(new HephaestusError({
+        entry.reject?.(new RexError({
           category: ErrorCategory.COMMAND_TIMEOUT,
           message: "Command expired before delivery (TTL: " + ttl + "ms)",
           retryable: false,
@@ -421,7 +421,7 @@ export class CommandQueue extends EventEmitter {
 
     // Reject all pending commands
     for (const [id, entry] of this.queue) {
-      entry.reject?.(new HephaestusError({
+      entry.reject?.(new RexError({
         category: ErrorCategory.CONNECTION_LOST,
         message: "Server shutting down",
         retryable: false,

@@ -5,7 +5,7 @@
  * since comments are a REST-only feature.
  */
 
-import { toHephaestusError } from "../../shared/errors.js";
+import { toRexError } from "../../shared/errors.js";
 import {
   postComment as restPostComment,
   deleteComment as restDeleteComment,
@@ -76,7 +76,7 @@ export async function postComment(
       createdAt: response.created_at,
     };
   } catch (err) {
-    throw toHephaestusError(err);
+    throw toRexError(err);
   }
 }
 
@@ -101,6 +101,6 @@ export async function deleteComment(
       commentId: params.commentId,
     };
   } catch (err) {
-    throw toHephaestusError(err);
+    throw toRexError(err);
   }
 }

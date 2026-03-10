@@ -61,13 +61,13 @@ export type FigmaConfig = z.infer<typeof FigmaConfigSchema>;
  *
  * Priority (highest to lowest):
  * 1. Environment variables (FIGMA_PAT, RELAY_PORT, RELAY_HOST, etc.)
- * 2. Config file (hephaestus.config.json)
+ * 2. Config file (rex.config.json)
  * 3. Defaults
  *
- * @param configPath - Path to config file (default: hephaestus.config.json in cwd)
+ * @param configPath - Path to config file (default: rex.config.json in cwd)
  */
 export function loadConfig(configPath?: string): Config {
-  const filePath = configPath ?? resolve(process.cwd(), "hephaestus.config.json");
+  const filePath = configPath ?? resolve(process.cwd(), "rex.config.json");
 
   // Attempt to read config file
   let fileConfig: Record<string, unknown> = {};

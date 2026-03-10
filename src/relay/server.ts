@@ -6,13 +6,14 @@ import type { Duplex } from "node:stream";
 
 import type { Command, CommandResult } from "../shared/types.js";
 import { ErrorCategory } from "../shared/types.js";
-import { HephaestusError } from "../shared/errors.js";
+import { RexError } from "../shared/errors.js";
 import type { Logger } from "../shared/logger.js";
 import type { Config } from "../shared/config.js";
 import { CommandQueue } from "./command-queue.js";
 import { ConnectionManager } from "./connection.js";
 import type { ConnectPayload } from "./connection.js";
 import { HeartbeatMonitor } from "./heartbeat.js";
+import { CommentWatcher } from "./comment-watcher.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,9 @@ export class RelayServer {
   // Chat response queue (MCP server → plugin)
   private chatOutbox: Array<{ id: string; message: string; timestamp: number; isError?: boolean; _isChunk?: boolean; _done?: boolean }> = [];
 
+  // Comment watcher for @rex mentions
+  private readonly commentWatcher: CommentWatcher;
+
   constructor(config: Config, logger: Logger) {
     this.config = config;
     this.logger = logger.child({ component: "relay-server" });
@@ -63,6 +67,11 @@ export class RelayServer {
       config.websocket,
       this.logger,
     );
+
+    // Create comment watcher — injects @rex mentions into chat inbox
+    this.commentWatcher = new CommentWatcher(config, this.logger, (msg) => {
+      this.enqueueChatMessage(msg);
+    });
 
     this.wireQueueEvents();
   }
@@ -160,8 +169,14 @@ export class RelayServer {
     this.chatWaiters = [];
     this.chatInbox = [];
     this.chatOutbox = [];
+    if (this.chatListeningGraceTimer) {
+      clearTimeout(this.chatListeningGraceTimer);
+      this.chatListeningGraceTimer = null;
+    }
+    this._chatListening = false;
 
     // Clean up components
+    this.commentWatcher.stop();
     this.heartbeat.destroy();
     this.queue.destroy();
 
@@ -216,6 +231,58 @@ export class RelayServer {
     return this._activityState;
   }
 
+  /** Whether wait_for_chat is actively listening (for plugin to show/hide chat button). */
+  private _chatListening = false;
+  private chatListeningGraceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  get chatListening(): boolean {
+    return this._chatListening;
+  }
+
+  private setChatListening(listening: boolean): void {
+    // Clear any pending grace timer
+    if (this.chatListeningGraceTimer) {
+      clearTimeout(this.chatListeningGraceTimer);
+      this.chatListeningGraceTimer = null;
+    }
+
+    if (this._chatListening === listening) return;
+    this._chatListening = listening;
+
+    // Push via WebSocket if connected
+    if (this.wsClient?.readyState === WebSocket.OPEN) {
+      const msg: WsMessage = {
+        type: "command",
+        id: "chat-listening",
+        payload: { listening } as unknown as Record<string, unknown>,
+        timestamp: Date.now(),
+      };
+      this.wsClient.send(JSON.stringify(msg));
+    }
+  }
+
+  /**
+   * Schedule chatListening = false after a grace period.
+   * Cancelled if wait_for_chat is called again before it fires.
+   */
+  private scheduleChatListeningTimeout(): void {
+    if (this.chatListeningGraceTimer) {
+      clearTimeout(this.chatListeningGraceTimer);
+    }
+    this.chatListeningGraceTimer = setTimeout(() => {
+      this.chatListeningGraceTimer = null;
+      // If Claude is still working on tools, reschedule — it will call wait_for_chat when done
+      if (this.chatWaiters.length === 0 && this.activeToolCount > 0) {
+        this.scheduleChatListeningTimeout();
+        return;
+      }
+      // If no waiters registered in the grace period, stop listening
+      if (this.chatWaiters.length === 0) {
+        this.setChatListening(false);
+      }
+    }, 5000);
+  }
+
   // ─── Chat Infrastructure ──────────────────────────────────────────────
 
   /**
@@ -228,6 +295,10 @@ export class RelayServer {
     if (waiter) {
       clearTimeout(waiter.timer);
       waiter.resolve(msg);
+      // If no more waiters, start grace timer — Claude should call wait_for_chat again soon
+      if (this.chatWaiters.length === 0) {
+        this.scheduleChatListeningTimeout();
+      }
       return;
     }
     // Otherwise queue it
@@ -241,7 +312,14 @@ export class RelayServer {
   waitForChatMessage(timeoutMs: number): Promise<{ id: string; message: string; selection: unknown[]; timestamp: number } | null> {
     // Check inbox first
     const queued = this.chatInbox.shift();
-    if (queued) return Promise.resolve(queued);
+    if (queued) {
+      // Still listening — signal stays true
+      this.setChatListening(true);
+      return Promise.resolve(queued);
+    }
+
+    // Signal that we're listening
+    this.setChatListening(true);
 
     // Long-poll
     return new Promise((resolve) => {
@@ -249,6 +327,10 @@ export class RelayServer {
         // Remove this waiter
         const idx = this.chatWaiters.findIndex(w => w.resolve === resolve);
         if (idx >= 0) this.chatWaiters.splice(idx, 1);
+        // If no more waiters, start grace timer — Claude should re-call wait_for_chat soon
+        if (this.chatWaiters.length === 0) {
+          this.scheduleChatListeningTimeout();
+        }
         resolve(null);
       }, timeoutMs);
 
@@ -337,7 +419,7 @@ export class RelayServer {
         const token = req.headers["x-auth-token"] as string | undefined;
         this.connection.validateAuth(token);
       } catch (err) {
-        if (err instanceof HephaestusError) {
+        if (err instanceof RexError) {
           reply.code(401).send(err.toResponse());
         } else {
           reply.code(401).send({ error: { message: "Unauthorized" } });
@@ -443,6 +525,9 @@ export class RelayServer {
 
     const session = this.connection.connect(body);
 
+    // Start comment watcher for @rex mentions
+    this.commentWatcher.start(body.fileKey);
+
     // Start poll monitoring
     this.heartbeat.startPollMonitoring(
       this.config.polling.defaultInterval,
@@ -475,7 +560,7 @@ export class RelayServer {
     try {
       this.connection.validatePluginId(pluginId);
     } catch (err) {
-      if (err instanceof HephaestusError) {
+      if (err instanceof RexError) {
         reply.code(err.category === ErrorCategory.PLUGIN_NOT_RUNNING ? 503 : 400);
         return err.toResponse() as unknown as Record<string, unknown>;
       }
@@ -494,8 +579,8 @@ export class RelayServer {
 
       // Even with no commands, signal activity state so the plugin
       // can show forging animation when Claude is working
-      if (this.isActive || chatResponses.length > 0) {
-        return { commands: [], activity: this.isActive, chatResponses };
+      if (this.isActive || chatResponses.length > 0 || this.chatListening) {
+        return { commands: [], activity: this.isActive, chatResponses, chatListening: this.chatListening };
       }
       reply.code(204);
       return undefined;
@@ -524,6 +609,7 @@ export class RelayServer {
       pollingInterval: suggestedInterval,
       activity: this.isActive,
       chatResponses,
+      chatListening: this.chatListening,
     };
   }
 

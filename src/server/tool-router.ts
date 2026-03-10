@@ -7,7 +7,7 @@
  * - For plugin-required tools: enqueue command via command queue, await result
  * - For REST API tools: call Figma REST API directly
  * - Serialize responses to MCP content format
- * - Handle errors: catch HephaestusError, format per SPEC.md section 5.2
+ * - Handle errors: catch RexError, format per SPEC.md section 5.2
  */
 
 import { v4 as uuidv4 } from "uuid";
@@ -17,7 +17,7 @@ import type { Config } from "../shared/config.js";
 import type { Logger } from "../shared/logger.js";
 import type { Command, CommandResult } from "../shared/types.js";
 import { CommandType, ErrorCategory } from "../shared/types.js";
-import { HephaestusError, validationError, toHephaestusError } from "../shared/errors.js";
+import { RexError, validationError, toRexError } from "../shared/errors.js";
 import { schemaRegistry, type ToolName } from "../tools/schemas.js";
 import type { RelayServer } from "../relay/server.js";
 
@@ -162,7 +162,7 @@ async function handleGetStyles(
   const fileKey = connectionInfo.fileKey as string | undefined;
   if (!fileKey) {
     throw validationError("No file is currently open. Connect the Figma plugin first.", {
-      suggestion: "Open a Figma file and run the Hephaestus plugin.",
+      suggestion: "Open a Figma file and run the Rex plugin.",
     });
   }
 
@@ -195,7 +195,7 @@ async function handleGetVariables(
   const fileKey = connectionInfo.fileKey as string | undefined;
   if (!fileKey) {
     throw validationError("No file is currently open. Connect the Figma plugin first.", {
-      suggestion: "Open a Figma file and run the Hephaestus plugin.",
+      suggestion: "Open a Figma file and run the Rex plugin.",
     });
   }
 
@@ -258,7 +258,7 @@ async function handleGetComponents(
   const fileKey = connectionInfo.fileKey as string | undefined;
   if (!fileKey) {
     throw validationError("No file is currently open. Connect the Figma plugin first.", {
-      suggestion: "Open a Figma file and run the Hephaestus plugin.",
+      suggestion: "Open a Figma file and run the Rex plugin.",
     });
   }
 
@@ -308,7 +308,7 @@ async function handlePostComment(
   const fileKey = connectionInfo.fileKey as string | undefined;
   if (!fileKey) {
     throw validationError("No file is currently open. Connect the Figma plugin first.", {
-      suggestion: "Open a Figma file and run the Hephaestus plugin.",
+      suggestion: "Open a Figma file and run the Rex plugin.",
     });
   }
 
@@ -336,7 +336,7 @@ async function handleDeleteComment(
   const fileKey = connectionInfo.fileKey as string | undefined;
   if (!fileKey) {
     throw validationError("No file is currently open. Connect the Figma plugin first.", {
-      suggestion: "Open a Figma file and run the Hephaestus plugin.",
+      suggestion: "Open a Figma file and run the Rex plugin.",
     });
   }
 
@@ -540,7 +540,7 @@ export async function routeToolCall(
       case "rest": {
         const handler = REST_HANDLERS[toolName];
         if (!handler) {
-          throw new HephaestusError({
+          throw new RexError({
             category: ErrorCategory.INTERNAL_ERROR,
             message: `No REST handler registered for tool: ${toolName}`,
             retryable: false,
@@ -552,7 +552,7 @@ export async function routeToolCall(
       case "local": {
         const handler = LOCAL_HANDLERS[toolName];
         if (!handler) {
-          throw new HephaestusError({
+          throw new RexError({
             category: ErrorCategory.INTERNAL_ERROR,
             message: `No local handler registered for tool: ${toolName}`,
             retryable: false,
@@ -562,7 +562,7 @@ export async function routeToolCall(
       }
 
       default:
-        throw new HephaestusError({
+        throw new RexError({
           category: ErrorCategory.INTERNAL_ERROR,
           message: `Unknown tool category for: ${toolName}`,
           retryable: false,
@@ -592,7 +592,7 @@ async function handlePluginTool(
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
   if (!route.commandType) {
-    throw new HephaestusError({
+    throw new RexError({
       category: ErrorCategory.INTERNAL_ERROR,
       message: `No command type mapped for plugin tool: ${toolName}`,
       retryable: false,
@@ -608,7 +608,7 @@ async function handlePluginTool(
 
   // Check for error in the command result
   if (result.status === "error") {
-    throw new HephaestusError({
+    throw new RexError({
       category: result.error?.category ?? ErrorCategory.INTERNAL_ERROR,
       message: result.error?.message ?? "Plugin command failed",
       retryable: result.error?.retryable ?? false,
@@ -675,7 +675,7 @@ async function handleBatchExecute(
         results.push(result.result ?? {});
       }
     } catch (caught) {
-      const hErr = toHephaestusError(caught);
+      const hErr = toRexError(caught);
       const err = { index: i, error: hErr.toResponse().error as Record<string, unknown> };
       if (atomic) {
         return {

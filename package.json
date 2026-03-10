@@ -1,11 +1,11 @@
 {
-  "name": "hephaestus-figma",
+  "name": "rex-figma",
   "version": "0.1.0",
   "description": "A stable, reliable MCP server for full read/write access to Figma's canvas",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "hephaestus": "dist/index.js"
+    "rex": "dist/index.js"
   },
   "scripts": {
     "build": "npm run build:server && npm run build:plugin",

@@ -1,12 +1,12 @@
-# Hephaestus — Implementation Prompt
+# Rex — Implementation Prompt
 
-> Execute this prompt to build the Hephaestus MCP server from the specifications in `specs/`.
+> Execute this prompt to build the Rex MCP server from the specifications in `specs/`.
 
 ---
 
 ## Context
 
-You are building **Hephaestus**, a Model Context Protocol (MCP) server that gives AI clients full programmatic read/write access to Figma's canvas. The system has three tiers:
+You are building **Rex**, a Model Context Protocol (MCP) server that gives AI clients full programmatic read/write access to Figma's canvas. The system has three tiers:
 
 1. **MCP Server** — Node.js/TypeScript process that exposes tools via stdio
 2. **Relay Server** — Embedded HTTP + WebSocket server on port 7780 (localhost only)
@@ -42,12 +42,12 @@ Execute these workstreams in parallel where possible. Dependencies are marked.
      * TextStyle, TextStyleRange, NodeType enum, BlendMode enum
      * ConnectionState enum (WAITING, POLLING, CONNECTED, DEGRADED)
      * CommandStatus enum (QUEUED, SENT, ACKNOWLEDGED, COMPLETED, TIMEOUT, RETRY, FAILED, EXPIRED)
-   - errors.ts — HephaestusError class with category, message, retryable, suggestion fields
+   - errors.ts — RexError class with category, message, retryable, suggestion fields
      * Factory functions: connectionError(), figmaApiError(), validationError(), internalError()
      * Error response serialization matching SPEC.md §5.2
    - logger.ts — Structured logger (JSON output for MCP compatibility, level filtering)
    - config.ts — Configuration loader:
-     * Reads hephaestus.config.json with defaults
+     * Reads rex.config.json with defaults
      * Environment variable overrides (FIGMA_PAT, RELAY_PORT, etc.)
      * Zod schema validation of config shape
      * Export typed Config interface
@@ -184,7 +184,7 @@ Build src/server/ — MCP server setup and tool routing.
    - For REST API tools: call Figma REST API directly
    - Validate inputs against Zod schemas
    - Serialize responses to MCP content format
-   - Handle errors: catch HephaestusError, format per SPEC.md §5.2
+   - Handle errors: catch RexError, format per SPEC.md §5.2
 
 3. src/index.ts — Entry point:
    - Parse CLI args
@@ -272,7 +272,7 @@ Variables:
 Build plugin/ — the Figma development plugin that acts as a thin relay.
 
 1. plugin/manifest.json — per PROTOCOL.md §10.2:
-   - name: "Hephaestus Bridge", id: "hephaestus-bridge-dev"
+   - name: "Rex Bridge", id: "rex-bridge-dev"
    - networkAccess: localhost/127.0.0.1 only
 
 2. plugin/fonts.ts — Font loading:
@@ -283,7 +283,7 @@ Build plugin/ — the Figma development plugin that acts as a thin relay.
 3. plugin/serializer.ts — Node serialization:
    - serializeNode(node, depth, seen): recursive serializer with circular ref prevention
    - colorToHex() and hexToColor(): Figma RGB ↔ hex conversion
-   - serializeAutoLayout(): Figma layout → Hephaestus format
+   - serializeAutoLayout(): Figma layout → Rex format
    - Serialize fills, strokes, effects, text styles
 
 4. plugin/idempotency.ts — LRU cache:
@@ -405,7 +405,7 @@ Build plugin/ — the Figma development plugin that acts as a thin relay.
    - lint: eslint + prettier check
    - start: node dist/index.js
 
-4. Create hephaestus.config.json with defaults from SPEC.md §8.2
+4. Create rex.config.json with defaults from SPEC.md §8.2
 ```
 
 ---
@@ -453,7 +453,7 @@ Run tests with `vitest`. Every module should have corresponding unit tests.
    - Each handler correctly translates params to command payload
    - REST API handlers call the correct endpoint
    - Plugin handlers enqueue the correct CommandType
-   - Error handling: HephaestusError is caught and formatted
+   - Error handling: RexError is caught and formatted
    - Batch handlers set batchId and atomic flag
 
 5. errors.test.ts — Error types and factories:

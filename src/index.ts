@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Hephaestus — Figma MCP Server
+ * Rex — Figma MCP Server
  *
  * Entry point. Parses CLI args, loads config, creates the MCP server
  * with embedded relay server, and starts listening on stdio.
@@ -10,7 +10,7 @@
 
 import { loadConfig } from "./shared/config.js";
 import { createLogger, type LogLevel } from "./shared/logger.js";
-import { HephaestusMcpServer } from "./server/mcp-server.js";
+import { RexMcpServer } from "./server/mcp-server.js";
 
 // ─── CLI Argument Parsing ───────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ function parseCliArgs(): CliArgs {
       case "--version":
       case "-v":
         // eslint-disable-next-line no-console
-        console.error("hephaestus v0.1.0");
+        console.error("rex v0.1.0");
         process.exit(0);
         break;
       default:
@@ -73,12 +73,12 @@ function parseCliArgs(): CliArgs {
 
 function printUsage(): void {
   const usage = `
-Hephaestus — Figma MCP Server
+Rex — Figma MCP Server
 
-Usage: hephaestus [options]
+Usage: rex [options]
 
 Options:
-  -c, --config <path>     Path to config file (default: hephaestus.config.json)
+  -c, --config <path>     Path to config file (default: rex.config.json)
   -l, --log-level <level> Log level: debug, info, warn, error (default: info)
   -p, --port <port>       Relay server port (default: 7780)
   -h, --help              Show this help message
@@ -110,11 +110,11 @@ async function main(): Promise<void> {
 
   // Create logger (outputs to stderr, stdout reserved for MCP)
   const logger = createLogger(cliArgs.logLevel, {
-    service: "hephaestus",
+    service: "rex",
     version: "0.1.0",
   });
 
-  logger.info("Starting Hephaestus MCP server", {
+  logger.info("Starting Rex MCP server", {
     relayPort: config.relay.port,
     relayHost: config.relay.host,
     wsEnabled: config.websocket.enabled,
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
   });
 
   // Create MCP server with embedded relay
-  const server = new HephaestusMcpServer(config, logger);
+  const server = new RexMcpServer(config, logger);
 
   // ─── Graceful Shutdown ──────────────────────────────────────────────────
 
@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   try {
     await server.start();
   } catch (err) {
-    logger.error("Failed to start Hephaestus", {
+    logger.error("Failed to start Rex", {
       error: err instanceof Error ? err.message : String(err),
     });
     process.exit(1);
@@ -181,7 +181,7 @@ void main();
 // ─── Re-exports for library usage ───────────────────────────────────────────
 
 export { type Config, loadConfig } from "./shared/config.js";
-export { HephaestusError, connectionError, figmaApiError, validationError, internalError } from "./shared/errors.js";
+export { RexError, connectionError, figmaApiError, validationError, internalError } from "./shared/errors.js";
 export { createLogger, type Logger, type LogLevel } from "./shared/logger.js";
 export * from "./shared/types.js";
-export { HephaestusMcpServer } from "./server/mcp-server.js";
+export { RexMcpServer } from "./server/mcp-server.js";

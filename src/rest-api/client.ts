@@ -6,7 +6,7 @@
  */
 
 import { type Config, loadConfig } from "../shared/config.js";
-import { HephaestusError, internalError, validationError } from "../shared/errors.js";
+import { RexError, internalError, validationError } from "../shared/errors.js";
 import { type Logger, createLogger } from "../shared/logger.js";
 import { ErrorCategory } from "../shared/types.js";
 
@@ -166,7 +166,7 @@ export class FigmaClient {
     const token = config.figma.personalAccessToken;
     if (!token) {
       throw validationError(
-        "FIGMA_PAT is required for REST API access. Set it via the FIGMA_PAT environment variable or in hephaestus.config.json.",
+        "FIGMA_PAT is required for REST API access. Set it via the FIGMA_PAT environment variable or in rex.config.json.",
         { suggestion: "Set the FIGMA_PAT environment variable to your Figma Personal Access Token." },
       );
     }
@@ -228,7 +228,7 @@ export class FigmaClient {
         signal: options.signal,
       });
     } catch (err) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.CONNECTION_LOST,
         message: `Figma API request failed: ${err instanceof Error ? err.message : String(err)}`,
         retryable: true,
@@ -320,7 +320,7 @@ export class FigmaClient {
     this.logger.error("Figma API error", { method, path, status, message });
 
     if (status === 401 || status === 403) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.INVALID_PARAMS,
         message: `Figma API authentication failed (${status}): ${message}`,
         retryable: false,
@@ -329,7 +329,7 @@ export class FigmaClient {
     }
 
     if (status === 404) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.NODE_NOT_FOUND,
         message: `Figma API resource not found: ${method} ${path} — ${message}`,
         retryable: false,
@@ -338,7 +338,7 @@ export class FigmaClient {
     }
 
     if (status === 429) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.CONNECTION_LOST,
         message: `Figma API rate limit exceeded: ${message}`,
         retryable: true,
@@ -347,7 +347,7 @@ export class FigmaClient {
     }
 
     if (status >= 500) {
-      throw new HephaestusError({
+      throw new RexError({
         category: ErrorCategory.CONNECTION_LOST,
         message: `Figma API server error (${status}): ${message}`,
         retryable: true,
@@ -355,7 +355,7 @@ export class FigmaClient {
       });
     }
 
-    throw new HephaestusError({
+    throw new RexError({
       category: ErrorCategory.INVALID_OPERATION,
       message: `Figma API error (${status}): ${message}`,
       retryable: false,

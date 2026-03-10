@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { ConnectionManager } from "../../relay/connection.js";
 import type { ConnectPayload } from "../../relay/connection.js";
 import { ConnectionState, ErrorCategory } from "../../shared/types.js";
-import { HephaestusError } from "../../shared/errors.js";
+import { RexError } from "../../shared/errors.js";
 import type { Logger } from "../../shared/logger.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -79,16 +79,16 @@ describe("ConnectionManager", () => {
     });
 
     it("rejects undefined token", () => {
-      expect(() => manager.validateAuth(undefined)).toThrow(HephaestusError);
+      expect(() => manager.validateAuth(undefined)).toThrow(RexError);
       expect(() => manager.validateAuth(undefined)).toThrow(/Invalid or missing authentication/);
     });
 
     it("rejects empty string token", () => {
-      expect(() => manager.validateAuth("")).toThrow(HephaestusError);
+      expect(() => manager.validateAuth("")).toThrow(RexError);
     });
 
     it("rejects wrong token", () => {
-      expect(() => manager.validateAuth("wrong-token")).toThrow(HephaestusError);
+      expect(() => manager.validateAuth("wrong-token")).toThrow(RexError);
     });
 
     it("error has correct category and retryable flag", () => {
@@ -96,8 +96,8 @@ describe("ConnectionManager", () => {
         manager.validateAuth("bad");
         expect.fail("Should have thrown");
       } catch (err) {
-        expect(err).toBeInstanceOf(HephaestusError);
-        const he = err as HephaestusError;
+        expect(err).toBeInstanceOf(RexError);
+        const he = err as RexError;
         expect(he.category).toBe(ErrorCategory.INVALID_PARAMS);
         expect(he.retryable).toBe(false);
       }
@@ -169,12 +169,12 @@ describe("ConnectionManager", () => {
     it("rejects invalid session ID", () => {
       manager.connect(createConnectPayload());
 
-      expect(() => manager.upgradeToWebSocket("wrong-session")).toThrow(HephaestusError);
+      expect(() => manager.upgradeToWebSocket("wrong-session")).toThrow(RexError);
       expect(() => manager.upgradeToWebSocket("wrong-session")).toThrow(/Invalid session ID/);
     });
 
     it("rejects upgrade when no session exists", () => {
-      expect(() => manager.upgradeToWebSocket("any")).toThrow(HephaestusError);
+      expect(() => manager.upgradeToWebSocket("any")).toThrow(RexError);
     });
   });
 
@@ -334,14 +334,14 @@ describe("ConnectionManager", () => {
     });
 
     it("throws when no session is active", () => {
-      expect(() => manager.validatePluginId("any")).toThrow(HephaestusError);
+      expect(() => manager.validatePluginId("any")).toThrow(RexError);
       expect(() => manager.validatePluginId("any")).toThrow(/No plugin session active/);
     });
 
     it("throws when pluginId does not match", () => {
       manager.connect(createConnectPayload({ pluginId: "correct-plugin" }));
 
-      expect(() => manager.validatePluginId("wrong-plugin")).toThrow(HephaestusError);
+      expect(() => manager.validatePluginId("wrong-plugin")).toThrow(RexError);
       expect(() => manager.validatePluginId("wrong-plugin")).toThrow(/Plugin ID mismatch/);
     });
 
@@ -350,8 +350,8 @@ describe("ConnectionManager", () => {
         manager.validatePluginId("any");
         expect.fail("Should have thrown");
       } catch (err) {
-        expect((err as HephaestusError).category).toBe(ErrorCategory.PLUGIN_NOT_RUNNING);
-        expect((err as HephaestusError).retryable).toBe(true);
+        expect((err as RexError).category).toBe(ErrorCategory.PLUGIN_NOT_RUNNING);
+        expect((err as RexError).retryable).toBe(true);
       }
     });
   });

@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { Command, CommandResult } from "../../shared/types.js";
 import { CommandType } from "../../shared/types.js";
-import { HephaestusError, toHephaestusError } from "../../shared/errors.js";
+import { RexError, toRexError } from "../../shared/errors.js";
 import { ErrorCategory } from "../../shared/types.js";
 import type { CreateNodeInput } from "../schemas.js";
 import type { WriteHandlerContext } from "./types.js";
@@ -77,7 +77,7 @@ export async function createNode(
     const result: CommandResult = await context.commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error?.category ?? ErrorCategory.INTERNAL_ERROR,
         message: result.error?.message ?? "CREATE_NODE command failed",
         retryable: result.error?.retryable ?? false,
@@ -90,6 +90,6 @@ export async function createNode(
 
     return result.result ?? { nodeId: null };
   } catch (err) {
-    throw toHephaestusError(err, commandId);
+    throw toRexError(err, commandId);
   }
 }

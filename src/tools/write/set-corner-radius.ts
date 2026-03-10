@@ -7,7 +7,7 @@
 import { randomUUID } from "node:crypto";
 import type { Command, CommandResult } from "../../shared/types.js";
 import { CommandType, ErrorCategory } from "../../shared/types.js";
-import { HephaestusError, toHephaestusError } from "../../shared/errors.js";
+import { RexError, toRexError } from "../../shared/errors.js";
 import type { z } from "zod";
 import type { setCornerRadiusSchema } from "../schemas.js";
 import type { WriteHandlerContext } from "./types.js";
@@ -41,7 +41,7 @@ export async function setCornerRadius(
     const result: CommandResult = await context.commandQueue.enqueue(command);
 
     if (result.status === "error") {
-      throw new HephaestusError({
+      throw new RexError({
         category: result.error?.category ?? ErrorCategory.INTERNAL_ERROR,
         message: result.error?.message ?? "SET_CORNER_RADIUS command failed",
         retryable: result.error?.retryable ?? false,
@@ -54,6 +54,6 @@ export async function setCornerRadius(
 
     return result.result ?? {};
   } catch (err) {
-    throw toHephaestusError(err, commandId);
+    throw toRexError(err, commandId);
   }
 }

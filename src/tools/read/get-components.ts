@@ -12,7 +12,7 @@ import type { CommandQueue } from "../../relay/command-queue.js";
 import type { Config } from "../../shared/config.js";
 import { getFileComponents, getFileComponentSets } from "../../rest-api/components.js";
 import type { FigmaComponentEntry, FigmaComponentSetEntry } from "../../rest-api/components.js";
-import { HephaestusError, figmaApiError, internalError } from "../../shared/errors.js";
+import { RexError, figmaApiError, internalError } from "../../shared/errors.js";
 import { ErrorCategory } from "../../shared/types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ export async function getComponents(
 
     return result;
   } catch (err) {
-    if (err instanceof HephaestusError) throw err;
+    if (err instanceof RexError) throw err;
     throw internalError(
       `Failed to fetch components: ${err instanceof Error ? err.message : String(err)}`,
       { cause: err },

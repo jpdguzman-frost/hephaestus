@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hephaestus is an MCP (Model Context Protocol) server that gives AI clients full programmatic read/write access to Figma's canvas. It has a three-tier architecture:
+Rex is an MCP (Model Context Protocol) server that gives AI clients full programmatic read/write access to Figma's canvas. It has a three-tier architecture:
 
 1. **MCP Server** — Node.js/TypeScript process exposing tools via stdio
 2. **Relay Server** — Embedded HTTP + WebSocket server on `127.0.0.1:7780` bridging MCP server and plugin

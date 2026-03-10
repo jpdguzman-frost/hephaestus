@@ -156,7 +156,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   execute:
     "Run arbitrary JavaScript in Figma's plugin context. Escape hatch for operations not covered by dedicated tools. 10s timeout, no network access.",
   get_status:
-    "Get Hephaestus connection status, transport info, plugin state, command queue stats, and uptime.",
+    "Get Rex connection status, transport info, plugin state, command queue stats, and uptime.",
   batch_execute:
     "Execute multiple independent operations in a single atomic call. More efficient than multiple individual tool calls.",
 
@@ -213,7 +213,7 @@ function buildToolDefinitions(): ToolDefinition[] {
 
 // ─── MCP Server ─────────────────────────────────────────────────────────────
 
-export class HephaestusMcpServer {
+export class RexMcpServer {
   private readonly server: Server;
   private readonly relay: RelayServer;
   private readonly config: Config;
@@ -228,7 +228,7 @@ export class HephaestusMcpServer {
     // Create MCP server
     this.server = new Server(
       {
-        name: "hephaestus",
+        name: "rex",
         version: "0.1.0",
       },
       {
@@ -266,7 +266,7 @@ export class HephaestusMcpServer {
    * Gracefully shut down both servers.
    */
   async stop(): Promise<void> {
-    this.logger.info("Shutting down Hephaestus");
+    this.logger.info("Shutting down Rex");
 
     try {
       await this.server.close();
@@ -284,7 +284,7 @@ export class HephaestusMcpServer {
       });
     }
 
-    this.logger.info("Hephaestus shut down complete");
+    this.logger.info("Rex shut down complete");
   }
 
   /**
@@ -333,8 +333,8 @@ export class HephaestusMcpServer {
         };
       } catch (err) {
         // Format error per SPEC.md section 5.2
-        const { toHephaestusError } = await import("../shared/errors.js");
-        const hErr = toHephaestusError(err);
+        const { toRexError } = await import("../shared/errors.js");
+        const hErr = toRexError(err);
         const errorResponse = hErr.toResponse();
 
         this.logger.error("Tool call failed", {

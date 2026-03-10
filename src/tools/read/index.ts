@@ -1,7 +1,7 @@
 /**
  * Read tool handlers — barrel export.
  *
- * All read operations for the Hephaestus MCP server.
+ * All read operations for the Rex MCP server.
  * REST API handlers use the FigmaClient directly; plugin handlers
  * send commands via the CommandQueue.
  */

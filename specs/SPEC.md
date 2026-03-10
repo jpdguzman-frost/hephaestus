@@ -1,4 +1,4 @@
-# Hephaestus — Figma MCP Server Specification
+# Rex — Figma MCP Server Specification
 
 > A stable, reliable MCP server for full read/write access to Figma's canvas.
 > Named after the Greek god of the forge — craftsmanship through precision.
@@ -35,7 +35,7 @@
 
 ### Non-Goals
 
-- **Replacing Figma's UI** — Hephaestus is for programmatic design operations, not a design tool
+- **Replacing Figma's UI** — Rex is for programmatic design operations, not a design tool
 - **Real-time collaboration sync** — no conflict resolution with other editors; operates on current document state
 - **Plugin marketplace distribution** — the Figma plugin is a local development relay, not a published plugin
 - **Browser/CDP support** — desktop Figma only, no browser-based Figma support
@@ -55,7 +55,7 @@
                      │ MCP protocol (stdio)
                      ▼
 ┌─────────────────────────────────────────────────┐
-│  Hephaestus MCP Server                          │
+│  Rex MCP Server                          │
 │  (Node.js / TypeScript)                         │
 │                                                 │
 │  ┌─────────────┐  ┌──────────────────────────┐  │
@@ -78,7 +78,7 @@
 ┌─────────────────────────────────────────────────┐
 │  Figma Desktop App                              │
 │  ┌───────────────────────────────────────────┐  │
-│  │ Hephaestus Plugin (thin relay)            │  │
+│  │ Rex Plugin (thin relay)            │  │
 │  │                                           │  │
 │  │  ┌──────────┐  ┌──────────┐  ┌────────┐  │  │
 │  │  │ Poller   │  │ Executor │  │ WS     │  │  │
@@ -381,7 +381,7 @@ enum ErrorCategory {
   INVALID_PARAMS = "INVALID_PARAMS",
   SCHEMA_VIOLATION = "SCHEMA_VIOLATION",
 
-  // Internal errors — bug in Hephaestus
+  // Internal errors — bug in Rex
   INTERNAL_ERROR = "INTERNAL_ERROR",
   SERIALIZATION_ERROR = "SERIALIZATION_ERROR",
 }
@@ -455,7 +455,7 @@ Commands include an optional `idempotencyKey`. If the plugin receives a command 
 
 ### 5.6 Font Handling
 
-Text operations often fail because fonts aren't loaded. Hephaestus handles this proactively:
+Text operations often fail because fonts aren't loaded. Rex handles this proactively:
 
 1. Before any text operation, the command includes the required `fontName`
 2. The plugin calls `figma.loadFontAsync(fontName)` before setting text
@@ -499,7 +499,7 @@ The `execute` escape-hatch tool (raw `figma.*` code) has safeguards:
 ## 7. Project Structure
 
 ```
-hephaestus/
+rex/
 ├── package.json
 ├── tsconfig.json
 ├── .eslintrc.json
@@ -608,10 +608,10 @@ hephaestus/
 
 ### 8.2 Configuration
 
-Hephaestus is configured via environment variables and/or a config file:
+Rex is configured via environment variables and/or a config file:
 
 ```json
-// hephaestus.config.json
+// rex.config.json
 {
   "relay": {
     "port": 7780,
@@ -646,24 +646,24 @@ Hephaestus is configured via environment variables and/or a config file:
 
 ```bash
 # Install
-npm install -g hephaestus-figma
+npm install -g rex-figma
 
 # Or run from source
 git clone <repo>
-cd hephaestus
+cd rex
 npm install
 npm run build
 
 # Start the MCP server (stdio mode for Claude Code)
-npx hephaestus
+npx rex
 
 # Or add to Claude Code MCP config
 # ~/.claude/settings.json
 {
   "mcpServers": {
-    "hephaestus": {
+    "rex": {
       "command": "npx",
-      "args": ["hephaestus"],
+      "args": ["rex"],
       "env": {
         "FIGMA_PAT": "your-personal-access-token"
       }
@@ -675,7 +675,7 @@ npx hephaestus
 **Plugin setup:**
 1. Open Figma Desktop
 2. Plugins → Development → Import plugin from manifest
-3. Select `hephaestus/plugin/manifest.json`
+3. Select `rex/plugin/manifest.json`
 4. Run the plugin in any file you want to work with
 
 ---

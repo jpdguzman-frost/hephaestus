@@ -19,7 +19,7 @@ import type {
   FigmaVariableColor,
   FigmaVariableValue,
 } from "../../rest-api/variables.js";
-import { HephaestusError, figmaApiError, internalError } from "../../shared/errors.js";
+import { RexError, figmaApiError, internalError } from "../../shared/errors.js";
 import { ErrorCategory } from "../../shared/types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ export async function getVariables(
       count: result.reduce((sum, c) => sum + ((c.variables as unknown[])?.length ?? 0), 0),
     };
   } catch (err) {
-    if (err instanceof HephaestusError) throw err;
+    if (err instanceof RexError) throw err;
     throw internalError(
       `Failed to fetch variables: ${err instanceof Error ? err.message : String(err)}`,
       { cause: err },

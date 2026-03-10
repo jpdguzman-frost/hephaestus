@@ -1,7 +1,7 @@
 // ─── Command Types ───────────────────────────────────────────────────────────
 
 /**
- * All command types supported by the Hephaestus plugin protocol.
+ * All command types supported by the Rex plugin protocol.
  * Each maps to a specific executor function in the plugin.
  */
 export enum CommandType {
@@ -185,7 +185,7 @@ export enum ErrorCategory {
   INVALID_PARAMS = "INVALID_PARAMS",
   SCHEMA_VIOLATION = "SCHEMA_VIOLATION",
 
-  // Internal errors — bug in Hephaestus
+  // Internal errors — bug in Rex
   INTERNAL_ERROR = "INTERNAL_ERROR",
   SERIALIZATION_ERROR = "SERIALIZATION_ERROR",
 }

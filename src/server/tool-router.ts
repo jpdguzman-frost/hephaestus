@@ -110,6 +110,10 @@ const TOOL_ROUTES: Record<string, ToolRoute> = {
   execute:       { category: "plugin", commandType: CommandType.EXECUTE },
   get_status:    { category: "local" },
   batch_execute: { category: "plugin", commandType: CommandType.EXECUTE },
+
+  // ── Chat Tools ───────────────────────────────────────────────────────────
+  wait_for_chat:       { category: "local" },
+  send_chat_response:  { category: "local" },
 };
 
 // ─── Handler Types ──────────────────────────────────────────────────────────
@@ -384,8 +388,56 @@ async function handleGetStatus(
   };
 }
 
+async function handleWaitForChat(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const timeout = (params["timeout"] as number | undefined) ?? 30000;
+
+  const msg = await context.relay.waitForChatMessage(timeout);
+
+  if (!msg) {
+    return {
+      status: "timeout",
+      message: "No chat message received within timeout period. Call wait_for_chat again to keep listening.",
+      _hint: "IMPORTANT: Call wait_for_chat again immediately to continue listening for messages.",
+    };
+  }
+
+  return {
+    status: "received",
+    id: msg.id,
+    message: msg.message,
+    selection: msg.selection,
+    timestamp: msg.timestamp,
+    _hint: "After processing this message and sending a response with send_chat_response, call wait_for_chat again to listen for the next message.",
+  };
+}
+
+async function handleSendChatResponse(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const messageId = params["messageId"] as string;
+  const message = params["message"] as string;
+
+  context.relay.sendChatResponse({
+    id: messageId,
+    message,
+    timestamp: Date.now(),
+  });
+
+  return {
+    status: "sent",
+    messageId,
+    _hint: "Response delivered. Call wait_for_chat now to listen for the next message from the plugin.",
+  };
+}
+
 const LOCAL_HANDLERS: Record<string, ToolHandler> = {
   get_status: handleGetStatus,
+  wait_for_chat: handleWaitForChat,
+  send_chat_response: handleSendChatResponse,
 };
 
 // ─── Main Router ────────────────────────────────────────────────────────────
@@ -444,7 +496,10 @@ export async function routeToolCall(
   };
 
   // Signal activity to the plugin (shows forging animation)
-  relay.signalActivity(true);
+  // Skip for wait_for_chat — no animation while long-polling
+  if (toolName !== "wait_for_chat") {
+    relay.signalActivity(true);
+  }
 
   try {
     // Route based on category
@@ -485,7 +540,9 @@ export async function routeToolCall(
     }
   } finally {
     // Signal activity complete
-    relay.signalActivity(false);
+    if (toolName !== "wait_for_chat") {
+      relay.signalActivity(false);
+    }
   }
 }
 
@@ -636,12 +693,17 @@ function buildCommand(
   batchSeq?: number,
   batchTotal?: number,
 ): Command {
+  // Screenshots of large frames can take a long time to render — use 2x TTL
+  const ttl = type === CommandType.SCREENSHOT
+    ? config.commands.defaultTtl * 2
+    : config.commands.defaultTtl;
+
   const command: Command = {
     id: uuidv4(),
     type,
     payload,
     timestamp: Date.now(),
-    ttl: config.commands.defaultTtl,
+    ttl,
   };
 
   if (batchId !== undefined) {

@@ -182,7 +182,8 @@ async function executeSearchNodes(payload: Record<string, unknown>): Promise<unk
 async function executeScreenshot(payload: Record<string, unknown>): Promise<unknown> {
   const nodeId = payload.nodeId as string | undefined;
   const format = (payload.format as string) ?? "png";
-  const scale = (payload.scale as number) ?? 2;
+  var requestedScale = (payload.scale as number) || 0;
+  var maxDimension = (payload.maxDimension as number) || 0;
 
   let target: SceneNode;
   if (nodeId) {
@@ -198,6 +199,16 @@ async function executeScreenshot(payload: Record<string, unknown>): Promise<unkn
       target = figma.currentPage.children[0] as SceneNode;
     } else {
       throw new Error("No node to capture — page is empty");
+    }
+  }
+
+  // Calculate effective scale
+  var scale = requestedScale || 2;
+  if (maxDimension > 0) {
+    var maxSide = Math.max(target.width, target.height);
+    if (maxSide * scale > maxDimension) {
+      scale = maxDimension / maxSide;
+      scale = Math.max(0.5, Math.min(4, scale)); // clamp to valid range
     }
   }
 

@@ -152,37 +152,51 @@ export type Stroke = z.infer<typeof stroke>;
 // Shared Composite Types: Effect
 // ============================================================================
 
+/** Normalize effect type names: accept both Figma API format (DROP_SHADOW) and kebab-case (drop-shadow). */
+const effectTypeMap: Record<string, string> = {
+  "DROP_SHADOW": "drop-shadow",
+  "INNER_SHADOW": "inner-shadow",
+  "LAYER_BLUR": "layer-blur",
+  "BACKGROUND_BLUR": "background-blur",
+};
+
+const normalizeEffectType = z.string().transform((v) => effectTypeMap[v] ?? v);
+
 const dropShadowEffect = z.object({
-  type: z.literal("drop-shadow"),
+  type: z.union([z.literal("drop-shadow"), z.literal("DROP_SHADOW")]).transform(() => "drop-shadow" as const),
   color: hexColor,
   offset: position,
   blur: z.number(),
+  radius: z.number().optional(),
   spread: z.number().optional(),
   visible: z.boolean().optional(),
+  blendMode: z.string().optional(),
 });
 
 const innerShadowEffect = z.object({
-  type: z.literal("inner-shadow"),
+  type: z.union([z.literal("inner-shadow"), z.literal("INNER_SHADOW")]).transform(() => "inner-shadow" as const),
   color: hexColor,
   offset: position,
   blur: z.number(),
+  radius: z.number().optional(),
   spread: z.number().optional(),
   visible: z.boolean().optional(),
+  blendMode: z.string().optional(),
 });
 
 const layerBlurEffect = z.object({
-  type: z.literal("layer-blur"),
+  type: z.union([z.literal("layer-blur"), z.literal("LAYER_BLUR")]).transform(() => "layer-blur" as const),
   blur: z.number(),
   visible: z.boolean().optional(),
 });
 
 const backgroundBlurEffect = z.object({
-  type: z.literal("background-blur"),
+  type: z.union([z.literal("background-blur"), z.literal("BACKGROUND_BLUR")]).transform(() => "background-blur" as const),
   blur: z.number(),
   visible: z.boolean().optional(),
 });
 
-const effect = z.discriminatedUnion("type", [
+const effect = z.union([
   dropShadowEffect,
   innerShadowEffect,
   layerBlurEffect,
@@ -328,9 +342,11 @@ export type TextStyleRange = z.infer<typeof textStyleRange>;
 // 1. Read Tools
 // ============================================================================
 
-/** get_node */
+/** get_node — accepts nodeIds as a single string or an array of strings */
 export const getNodeSchema = z.object({
-  nodeIds: z.array(z.string()).min(1),
+  nodeIds: z.union([z.string(), z.array(z.string()).min(1)]).transform((v) =>
+    typeof v === "string" ? [v] : v,
+  ),
   depth: z.number().min(0).max(5).optional(),
   properties: z.array(z.string()).optional(),
 });
@@ -358,11 +374,14 @@ export const searchNodesSchema = z.object({
   limit: z.number().optional(),
 });
 
-/** screenshot */
+/** screenshot — scale accepts string or number, coerced to number */
 export const screenshotSchema = z.object({
   nodeId: z.string().optional(),
   format: z.enum(["png", "jpg", "svg"]).optional(),
-  scale: z.number().min(0.5).max(4).optional(),
+  scale: z.union([z.number(), z.string().transform(Number)])
+    .pipe(z.number().min(0.5).max(4))
+    .optional(),
+  maxDimension: z.number().min(100).max(4096).optional(),
 });
 
 /** get_styles */
@@ -811,6 +830,21 @@ export const batchExecuteSchema = z.object({
 });
 
 // ============================================================================
+// 11. Chat Tools
+// ============================================================================
+
+/** wait_for_chat — long-poll for a chat message from the plugin */
+export const waitForChatSchema = z.object({
+  timeout: z.number().min(1000).max(120000).optional(),
+});
+
+/** send_chat_response — send a response back to the plugin chat */
+export const sendChatResponseSchema = z.object({
+  messageId: z.string(),
+  message: z.string(),
+});
+
+// ============================================================================
 // Schema Registry — maps tool names to their Zod schemas
 // ============================================================================
 
@@ -884,6 +918,10 @@ export const schemaRegistry = {
   // Utility
   execute: executeSchema,
   batch_execute: batchExecuteSchema,
+
+  // Chat
+  wait_for_chat: waitForChatSchema,
+  send_chat_response: sendChatResponseSchema,
 } as const;
 
 export type ToolName = keyof typeof schemaRegistry;

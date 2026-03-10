@@ -105,7 +105,7 @@ export class HeartbeatMonitor {
    * @param onTimeout - Callback when too many polls are missed
    */
   startPollMonitoring(
-    expectedInterval: number,
+    _expectedInterval: number,
     onTimeout: () => void,
   ): void {
     // Stop any existing poll monitoring first (prevents duplicate timers on reconnect)

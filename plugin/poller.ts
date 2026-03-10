@@ -145,6 +145,11 @@ export class Poller {
     return this.authToken;
   }
 
+  /** Send an authenticated POST request through the HTTP bridge. */
+  async postAuthenticated(path: string, body: unknown): Promise<HttpResponse> {
+    return httpRequest("POST", this.baseUrl + path, body, this.getHeaders(), 5000);
+  }
+
   async connect(): Promise<boolean> {
     try {
       // Step 1: Health check
@@ -263,6 +268,18 @@ export class Poller {
           figma.ui.postMessage({ type: "forging-start" });
         } else if (data.activity === false) {
           figma.ui.postMessage({ type: "forging-stop" });
+        }
+
+        // Forward chat responses to UI
+        var chatResponses = data.chatResponses as Array<{ id: string; message: string }> | undefined;
+        if (chatResponses && chatResponses.length > 0) {
+          for (var j = 0; j < chatResponses.length; j++) {
+            figma.ui.postMessage({
+              type: "chat-response",
+              message: chatResponses[j].message,
+              id: chatResponses[j].id
+            });
+          }
         }
 
         if (commands && commands.length > 0) {

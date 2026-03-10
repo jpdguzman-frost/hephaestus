@@ -48,7 +48,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   search_nodes:
     "Search for nodes by name, type, or properties. Supports scoping to a subtree.",
   screenshot:
-    "Capture a screenshot of a node or the current page as PNG, JPG, or SVG.",
+    "Capture a screenshot of a node or the current page as PNG, JPG, or SVG. For large frames, use maxDimension (e.g. 1024) to auto-downscale and avoid timeout. Scale accepts 0.5-4.",
   get_styles:
     "Get all styles (fill, text, effect, grid) from the current file.",
   get_variables:
@@ -58,7 +58,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
 
   // ── Write Tools: Nodes ──────────────────────────────────────────────────
   create_node:
-    "Create a single node or a composite node tree with children, styles, auto-layout, and effects. Atomic: creates the full tree or nothing.",
+    "Create a single node or a composite node tree with children, styles, auto-layout, and effects. Atomic: creates the full tree or nothing. NOTE: layoutSizingHorizontal/Vertical='FILL' can only be set AFTER the node is a child of an auto-layout frame — use update_node after reparenting if needed.",
   update_node:
     "Update one or more properties on an existing node. Batch-friendly: set any combination of properties in a single call.",
   batch_update_nodes:
@@ -88,9 +88,9 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
 
   // ── Write Tools: Layout ─────────────────────────────────────────────────
   set_auto_layout:
-    "Configure auto-layout on a frame: direction, spacing, padding, alignment, sizing. Can also remove auto-layout.",
+    "Configure auto-layout on a frame: direction, spacing, padding, alignment, sizing. Can also remove auto-layout. NOTE: counterAxisSizingMode only accepts FIXED or AUTO (not FILL). To get fill behavior, use layoutSizingHorizontal/Vertical='FILL' on the child via update_node.",
   set_layout_child:
-    "Configure how a child behaves within its auto-layout parent: alignment, grow, positioning.",
+    "Configure how a child behaves within its auto-layout parent: alignment, grow, positioning. NOTE: To make a child fill its parent's width/height, set layoutSizingHorizontal/Vertical='FILL' via update_node instead of counterAxisSizingMode='FILL'.",
   batch_set_layout_children:
     "Configure multiple children's layout behavior in one call within an auto-layout parent.",
   set_layout_grid:
@@ -159,6 +159,12 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     "Get Hephaestus connection status, transport info, plugin state, command queue stats, and uptime.",
   batch_execute:
     "Execute multiple independent operations in a single atomic call. More efficient than multiple individual tool calls.",
+
+  // ── Chat Tools ──────────────────────────────────────────────────────────
+  wait_for_chat:
+    "Long-poll for a chat message from the Figma plugin. Returns when a message arrives or after timeout. IMPORTANT: You MUST call this tool again after every response you send — it is a continuous listening loop. After timeout, call it again immediately. After receiving a message and responding with send_chat_response, call it again immediately. Never stop the loop unless the user explicitly asks you to stop listening.",
+  send_chat_response:
+    "Send a response message back to the Figma plugin chat interface. After calling this, you MUST call wait_for_chat again immediately to continue listening for the next message.",
 };
 
 // ─── Schema Conversion ─────────────────────────────────────────────────────

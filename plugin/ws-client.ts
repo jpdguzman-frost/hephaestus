@@ -187,6 +187,19 @@ export class WSClient {
             break;
           }
 
+          // Check for chat response (server sending Claude's reply)
+          if (message.id === "chat-response" && payload) {
+            var chatResp = payload.chatResponse as Record<string, unknown>;
+            if (chatResp) {
+              figma.ui.postMessage({
+                type: "chat-response",
+                message: chatResp.message as string,
+                id: chatResp.id as string
+              });
+            }
+            break;
+          }
+
           var command = payload as unknown as Command;
 
           // Send ack immediately

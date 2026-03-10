@@ -15,6 +15,9 @@ var RELAY_URL = "http://localhost:7780";
 
 type TransportStatus = "websocket" | "http" | "disconnected";
 
+// Module-scope poller reference so chat handler can access it
+var pollerRef: Poller | null = null;
+
 function reportStatus(transport: TransportStatus): void {
   figma.ui.postMessage({
     type: "status",
@@ -36,7 +39,7 @@ async function main(): Promise<void> {
   // Set up the message bridge: UI iframe handles HTTP/WS, relays responses back
   setupHttpBridge();
 
-  // Add WS message handling to the existing onmessage handler
+  // Add WS, chat, and resize message handling to the existing onmessage handler
   var existingHandler = figma.ui.onmessage;
   figma.ui.onmessage = function(msg: unknown) {
     var message = msg as Record<string, unknown>;
@@ -47,6 +50,14 @@ async function main(): Promise<void> {
       message.type === "ws-error"
     )) {
       ws.handleUiMessage(message);
+      return;
+    }
+    if (message && message.type === "chat-send") {
+      handleChatSend(message as { type: string; id: string; message: string });
+      return;
+    }
+    if (message && message.type === "resize") {
+      figma.ui.resize(message.width as number, message.height as number);
       return;
     }
     // Forward to existing handler (which handles http-response)
@@ -60,6 +71,7 @@ async function main(): Promise<void> {
 
   // Start HTTP polling (always-on baseline)
   var poller = new Poller(RELAY_URL, executor);
+  pollerRef = poller;
   var connected = await poller.connect();
 
   if (connected) {
@@ -135,6 +147,35 @@ async function main(): Promise<void> {
       poller.disconnect();
     });
   }
+}
+
+function handleChatSend(msg: { type: string; id: string; message: string }): void {
+  if (!pollerRef) {
+    console.warn("Chat send failed: not connected");
+    return;
+  }
+
+  // Capture current selection context
+  var selection: Array<{ id: string; name: string; type: string }> = [];
+  var sel = figma.currentPage.selection;
+  for (var i = 0; i < sel.length; i++) {
+    selection.push({
+      id: sel[i].id,
+      name: sel[i].name,
+      type: sel[i].type
+    });
+  }
+
+  // Use the poller's authenticated HTTP bridge (same path as /connect, /results)
+  pollerRef.postAuthenticated("/chat/send", {
+    id: msg.id,
+    message: msg.message,
+    selection: selection
+  }).then(function(resp) {
+    if (resp.status < 200 || resp.status >= 300) {
+      console.warn("Chat send failed: " + resp.status + " " + resp.body);
+    }
+  });
 }
 
 main().catch(function(e) { console.error("Hephaestus init failed:", e); });

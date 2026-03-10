@@ -46,6 +46,13 @@ export class RelayServer {
   private startTime: number = 0;
   private pollingState: PollingState = { lastCommandTime: 0 };
 
+  // Chat message queue (plugin → MCP server)
+  private chatInbox: Array<{ id: string; message: string; selection: unknown[]; timestamp: number }> = [];
+  private chatWaiters: Array<{ resolve: (msg: { id: string; message: string; selection: unknown[]; timestamp: number }) => void; timer: ReturnType<typeof setTimeout> }> = [];
+
+  // Chat response queue (MCP server → plugin)
+  private chatOutbox: Array<{ id: string; message: string; timestamp: number }> = [];
+
   constructor(config: Config, logger: Logger) {
     this.config = config;
     this.logger = logger.child({ component: "relay-server" });
@@ -145,6 +152,15 @@ export class RelayServer {
       this.wss = null;
     }
 
+    // Clean up chat waiters
+    for (const waiter of this.chatWaiters) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(null as unknown as { id: string; message: string; selection: unknown[]; timestamp: number });
+    }
+    this.chatWaiters = [];
+    this.chatInbox = [];
+    this.chatOutbox = [];
+
     // Clean up components
     this.heartbeat.destroy();
     this.queue.destroy();
@@ -198,6 +214,77 @@ export class RelayServer {
   /** Whether any tools are currently active (for polling responses). */
   get isActive(): boolean {
     return this._activityState;
+  }
+
+  // ─── Chat Infrastructure ──────────────────────────────────────────────
+
+  /**
+   * Called by the plugin to send a chat message.
+   * If an MCP tool is long-polling (via wait_for_chat), resolve it immediately.
+   */
+  enqueueChatMessage(msg: { id: string; message: string; selection: unknown[]; timestamp: number }): void {
+    // If there's a waiter, resolve immediately
+    const waiter = this.chatWaiters.shift();
+    if (waiter) {
+      clearTimeout(waiter.timer);
+      waiter.resolve(msg);
+      return;
+    }
+    // Otherwise queue it
+    this.chatInbox.push(msg);
+  }
+
+  /**
+   * Called by the MCP tool `wait_for_chat` to long-poll for a message.
+   * Returns immediately if there's a queued message, otherwise waits up to timeoutMs.
+   */
+  waitForChatMessage(timeoutMs: number): Promise<{ id: string; message: string; selection: unknown[]; timestamp: number } | null> {
+    // Check inbox first
+    const queued = this.chatInbox.shift();
+    if (queued) return Promise.resolve(queued);
+
+    // Long-poll
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        // Remove this waiter
+        const idx = this.chatWaiters.findIndex(w => w.resolve === resolve);
+        if (idx >= 0) this.chatWaiters.splice(idx, 1);
+        resolve(null);
+      }, timeoutMs);
+
+      this.chatWaiters.push({ resolve, timer });
+    });
+  }
+
+  /**
+   * Called by the MCP tool `send_chat_response` to push a response back to the plugin.
+   * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
+   */
+  sendChatResponse(response: { id: string; message: string; timestamp: number }): void {
+    // Push via WebSocket if connected (instant delivery)
+    if (this.wsClient?.readyState === WebSocket.OPEN) {
+      const msg: WsMessage = {
+        type: "command",
+        id: "chat-response",
+        payload: { chatResponse: response } as unknown as Record<string, unknown>,
+        timestamp: Date.now(),
+      };
+      this.wsClient.send(JSON.stringify(msg));
+      // WS delivered — don't also queue for HTTP polling (prevents duplicates)
+      return;
+    }
+
+    // WS not available — queue for HTTP polling pickup
+    this.chatOutbox.push(response);
+  }
+
+  /**
+   * Get and drain pending chat responses for the plugin (called during HTTP polling).
+   */
+  drainChatResponses(): Array<{ id: string; message: string; timestamp: number }> {
+    const responses = [...this.chatOutbox];
+    this.chatOutbox = [];
+    return responses;
   }
 
   /**
@@ -263,6 +350,37 @@ export class RelayServer {
       preHandler: authHook,
     }, async (req: FastifyRequest, reply: FastifyReply) => {
       return this.handleDisconnect(req, reply);
+    });
+
+    // POST /chat/send — plugin sends a chat message
+    app.post("/chat/send", {
+      preHandler: authHook,
+    }, async (req: FastifyRequest, _reply: FastifyReply) => {
+      const body = req.body as { id: string; message: string; selection?: unknown[] };
+      if (!body?.message) {
+        return { error: "Missing message field" };
+      }
+      const chatMsg = {
+        id: body.id || `chat_${Date.now()}`,
+        message: body.message,
+        selection: body.selection || [],
+        timestamp: Date.now(),
+      };
+      this.enqueueChatMessage(chatMsg);
+      this.logger.info("Chat message received from plugin", { id: chatMsg.id });
+      return { status: "ok", id: chatMsg.id };
+    });
+
+    // GET /chat/responses — plugin polls for chat responses
+    app.get("/chat/responses", {
+      preHandler: authHook,
+    }, async (_req: FastifyRequest, reply: FastifyReply) => {
+      const responses = this.drainChatResponses();
+      if (responses.length === 0) {
+        reply.code(204);
+        return undefined;
+      }
+      return { responses };
     });
   }
 
@@ -350,10 +468,13 @@ export class RelayServer {
     const pending = this.queue.getPending();
 
     if (pending.length === 0) {
+      // Include any pending chat responses
+      const chatResponses = this.drainChatResponses();
+
       // Even with no commands, signal activity state so the plugin
       // can show forging animation when Claude is working
-      if (this.isActive) {
-        return { commands: [], activity: true };
+      if (this.isActive || chatResponses.length > 0) {
+        return { commands: [], activity: this.isActive, chatResponses };
       }
       reply.code(204);
       return undefined;
@@ -374,10 +495,14 @@ export class RelayServer {
     // Calculate suggested polling interval
     const suggestedInterval = this.calculatePollingInterval();
 
+    // Include any pending chat responses
+    const chatResponses = this.drainChatResponses();
+
     return {
       commands,
       pollingInterval: suggestedInterval,
       activity: this.isActive,
+      chatResponses,
     };
   }
 

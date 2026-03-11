@@ -202,14 +202,13 @@ async function executeScreenshot(payload: Record<string, unknown>): Promise<unkn
     }
   }
 
-  // Calculate effective scale
+  // Calculate effective scale — default cap at 2048px to keep results under size limits
+  var effectiveMaxDimension = maxDimension > 0 ? maxDimension : 2048;
   var scale = requestedScale || 2;
-  if (maxDimension > 0) {
-    var maxSide = Math.max(target.width, target.height);
-    if (maxSide * scale > maxDimension) {
-      scale = maxDimension / maxSide;
-      scale = Math.max(0.5, Math.min(4, scale)); // clamp to valid range
-    }
+  var maxSide = Math.max(target.width, target.height);
+  if (maxSide * scale > effectiveMaxDimension) {
+    scale = effectiveMaxDimension / maxSide;
+    scale = Math.max(0.5, Math.min(4, scale)); // clamp to valid range
   }
 
   var settings: ExportSettings;
@@ -628,14 +627,107 @@ export class Executor {
 
   /**
    * Execute an array of commands sequentially (FIFO).
-   * Read commands can be interleaved when marked as priority.
+   * Commands with the same batchId and atomic flag are grouped —
+   * if any command in a batch fails, the entire batch is rolled back.
    */
   async executeCommands(commands: Command[]): Promise<CommandResult[]> {
     const results: CommandResult[] = [];
+
+    // Group commands by batchId for atomic handling
+    const batches = new Map<string, Command[]>();
+    const standalone: Command[] = [];
+
     for (const cmd of commands) {
+      if (cmd.batchId && cmd.atomic) {
+        const group = batches.get(cmd.batchId) || [];
+        group.push(cmd);
+        batches.set(cmd.batchId, group);
+      } else {
+        standalone.push(cmd);
+      }
+    }
+
+    // Execute standalone commands
+    for (const cmd of standalone) {
       const result = await this.executeCommand(cmd);
       results.push(result);
     }
+
+    // Execute atomic batches with snapshot/rollback
+    for (const [batchId, batchCmds] of batches) {
+      // Sort by batchSeq for deterministic ordering
+      batchCmds.sort((a, b) => (a.batchSeq ?? 0) - (b.batchSeq ?? 0));
+
+      // Snapshot node states before batch for rollback
+      const snapshots: Array<{ nodeId: string; props: Record<string, unknown> }> = [];
+      for (const cmd of batchCmds) {
+        const nodeId = cmd.payload.nodeId as string;
+        if (nodeId) {
+          const node = figma.getNodeById(nodeId) as SceneNode | null;
+          if (node) {
+            snapshots.push({
+              nodeId,
+              props: {
+                x: node.x, y: node.y, width: node.width, height: node.height,
+                name: node.name, visible: node.visible, locked: node.locked, opacity: node.opacity,
+              },
+            });
+          }
+        }
+      }
+
+      const batchResults: CommandResult[] = [];
+      let batchFailed = false;
+
+      for (const cmd of batchCmds) {
+        const result = await this.executeCommand(cmd);
+        batchResults.push(result);
+        if (result.status === "error") {
+          batchFailed = true;
+          break;
+        }
+      }
+
+      if (batchFailed) {
+        // Rollback: restore snapshotted properties
+        for (const snap of snapshots) {
+          try {
+            const node = figma.getNodeById(snap.nodeId) as SceneNode | null;
+            if (node) {
+              node.x = snap.props.x as number;
+              node.y = snap.props.y as number;
+              node.resize(snap.props.width as number, snap.props.height as number);
+              node.name = snap.props.name as string;
+              node.visible = snap.props.visible as boolean;
+              node.locked = snap.props.locked as boolean;
+              node.opacity = snap.props.opacity as number;
+            }
+          } catch {
+            // Best-effort rollback
+          }
+        }
+
+        // Mark remaining commands as failed
+        for (let i = batchResults.length; i < batchCmds.length; i++) {
+          batchResults.push({
+            id: batchCmds[i].id,
+            status: "error",
+            error: {
+              category: "INTERNAL_ERROR",
+              message: "Batch rolled back due to earlier failure",
+              retryable: false,
+            },
+            duration: 0,
+            timestamp: Date.now(),
+            batchId,
+            batchSeq: batchCmds[i].batchSeq,
+          });
+        }
+      }
+
+      results.push(...batchResults);
+    }
+
     return results;
   }
 }

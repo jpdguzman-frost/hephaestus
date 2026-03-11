@@ -60,8 +60,8 @@ const position = z.object({
 });
 
 const size = z.object({
-  width: z.number(),
-  height: z.number().optional(),
+  width: z.number().positive(),
+  height: z.number().positive().optional(),
 });
 
 const sizeOptionalBoth = z.object({
@@ -74,31 +74,31 @@ const sizeOptionalBoth = z.object({
 // ============================================================================
 
 const paddingObject = z.object({
-  top: z.number(),
-  right: z.number(),
-  bottom: z.number(),
-  left: z.number(),
+  top: z.number().min(0),
+  right: z.number().min(0),
+  bottom: z.number().min(0),
+  left: z.number().min(0),
 });
 
 /** Uniform number or per-side object */
-const padding = z.union([z.number(), paddingObject]);
+const padding = z.union([z.number().min(0), paddingObject]);
 
 const cornerRadiusObject = z.object({
-  topLeft: z.number(),
-  topRight: z.number(),
-  bottomRight: z.number(),
-  bottomLeft: z.number(),
+  topLeft: z.number().min(0),
+  topRight: z.number().min(0),
+  bottomRight: z.number().min(0),
+  bottomLeft: z.number().min(0),
 });
 
 /** Uniform number or per-corner object */
-const cornerRadius = z.union([z.number(), cornerRadiusObject]);
+const cornerRadius = z.union([z.number().min(0), cornerRadiusObject]);
 
 // ============================================================================
 // Shared Composite Types: Fill
 // ============================================================================
 
 const gradientStop = z.object({
-  position: z.number(),
+  position: z.number().min(0).max(1),
   color: hexColor,
 });
 
@@ -166,8 +166,8 @@ const dropShadowEffect = z.object({
   type: z.union([z.literal("drop-shadow"), z.literal("DROP_SHADOW")]).transform(() => "drop-shadow" as const),
   color: hexColor,
   offset: position,
-  blur: z.number(),
-  radius: z.number().optional(),
+  blur: z.number().min(0),
+  radius: z.number().min(0).optional(),
   spread: z.number().optional(),
   visible: z.boolean().optional(),
   blendMode: z.string().optional(),
@@ -177,8 +177,8 @@ const innerShadowEffect = z.object({
   type: z.union([z.literal("inner-shadow"), z.literal("INNER_SHADOW")]).transform(() => "inner-shadow" as const),
   color: hexColor,
   offset: position,
-  blur: z.number(),
-  radius: z.number().optional(),
+  blur: z.number().min(0),
+  radius: z.number().min(0).optional(),
   spread: z.number().optional(),
   visible: z.boolean().optional(),
   blendMode: z.string().optional(),
@@ -186,13 +186,13 @@ const innerShadowEffect = z.object({
 
 const layerBlurEffect = z.object({
   type: z.union([z.literal("layer-blur"), z.literal("LAYER_BLUR")]).transform(() => "layer-blur" as const),
-  blur: z.number(),
+  blur: z.number().min(0),
   visible: z.boolean().optional(),
 });
 
 const backgroundBlurEffect = z.object({
   type: z.union([z.literal("background-blur"), z.literal("BACKGROUND_BLUR")]).transform(() => "background-blur" as const),
-  blur: z.number(),
+  blur: z.number().min(0),
   visible: z.boolean().optional(),
 });
 
@@ -212,7 +212,7 @@ export type Effect = z.infer<typeof effect>;
 const autoLayoutParams = z.object({
   direction: z.enum(["horizontal", "vertical"]).optional(),
   wrap: z.boolean().optional(),
-  spacing: z.union([z.number(), z.literal("auto")]).optional(),
+  spacing: z.union([z.number().min(0), z.literal("auto")]).optional(),
   padding: padding.optional(),
   primaryAxisAlign: z
     .enum(["min", "center", "max", "space-between"])
@@ -307,7 +307,7 @@ const letterSpacingObject = z.object({
 const textStyle = z.object({
   fontFamily: z.string().optional(),
   fontWeight: z.number().min(100).max(900).optional(),
-  fontSize: z.number().optional(),
+  fontSize: z.number().positive().optional(),
   lineHeight: z.union([z.number(), lineHeightObject]).optional(),
   letterSpacing: z.union([z.number(), letterSpacingObject]).optional(),
   color: hexColor.optional(),
@@ -420,7 +420,7 @@ const baseCreateNodeFields = {
   size: size.optional(),
   fills: z.array(fill).optional(),
   strokes: z.array(stroke).optional(),
-  strokeWeight: z.number().optional(),
+  strokeWeight: z.number().min(0).optional(),
   effects: z.array(effect).optional(),
   cornerRadius: cornerRadius.optional(),
   opacity: z.number().min(0).max(1).optional(),
@@ -469,7 +469,7 @@ export const updateNodeSchema = z.object({
   size: sizeOptionalBoth.optional(),
   fills: z.array(fill).optional(),
   strokes: z.array(stroke).optional(),
-  strokeWeight: z.number().optional(),
+  strokeWeight: z.number().min(0).optional(),
   effects: z.array(effect).optional(),
   cornerRadius: cornerRadius.optional(),
   opacity: z.number().min(0).max(1).optional(),
@@ -540,7 +540,7 @@ export const setFillsSchema = z.object({
 export const setStrokesSchema = z.object({
   nodeId: z.string(),
   strokes: z.array(stroke),
-  strokeWeight: z.number().optional(),
+  strokeWeight: z.number().min(0).optional(),
   strokeAlign: z.enum(["INSIDE", "OUTSIDE", "CENTER"]).optional(),
   dashPattern: z.array(z.number()).optional(),
   strokeCap: z
@@ -571,7 +571,7 @@ export const setAutoLayoutSchema = z.object({
   enabled: z.boolean().optional(),
   direction: z.enum(["horizontal", "vertical"]).optional(),
   wrap: z.boolean().optional(),
-  spacing: z.union([z.number(), z.literal("auto")]).optional(),
+  spacing: z.union([z.number().min(0), z.literal("auto")]).optional(),
   padding: padding.optional(),
   primaryAxisAlign: z
     .enum(["min", "center", "max", "space-between"])

@@ -232,6 +232,12 @@ function handleChatSend(msg: { type: string; id: string; message: string }): voi
   }).then(function(resp) {
     if (resp.status < 200 || resp.status >= 300) {
       console.warn("Chat send failed: " + resp.status + " " + resp.body);
+      figma.ui.postMessage({
+        type: "chat-send-error",
+        id: msg.id,
+        error: "Failed to send message (status " + resp.status + ")"
+      });
+      return;
     }
 
     // Wait for thumbnail then confirm to UI with selection context

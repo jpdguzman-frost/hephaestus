@@ -517,6 +517,80 @@
     max-width: 252px;
   }
 
+  /* ─── Connection Lost Banner ─── */
+  #connection-lost-bar {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(240, 69, 69, 0.12);
+    border-bottom: 1px solid rgba(240, 69, 69, 0.2);
+    font-size: 12px;
+    font-weight: 600;
+    color: #F04545;
+  }
+
+  #connection-lost-bar.visible {
+    display: flex;
+  }
+
+  #connection-lost-bar .lost-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #F04545;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  /* ─── Crash Overlay ─── */
+  #crash-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 25, 23, 0.95);
+    z-index: 999;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  #crash-overlay.visible {
+    display: flex;
+  }
+
+  #crash-overlay .crash-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #F04545;
+  }
+
+  #crash-overlay .crash-body {
+    font-size: 13px;
+    color: #8C827A;
+    max-width: 260px;
+    line-height: 1.5;
+  }
+
+  #crash-overlay .crash-reload {
+    margin-top: 8px;
+    padding: 8px 20px;
+    background: #3B3634;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    color: #F4F3F2;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  #crash-overlay .crash-reload:hover {
+    background: #4A4340;
+  }
+
   /* ─── Markdown in Chat ─── */
   .msg-content code.md-inline-code {
     background: #1E1917;
@@ -582,6 +656,56 @@
   .msg-content .md-link:hover {
     text-decoration: underline;
   }
+
+  /* ─── Markdown Tables ─── */
+  .msg-content .md-table-wrap {
+    overflow-x: auto;
+    margin: 8px 0;
+    border-radius: 8px;
+    border: 1px solid #2C2826;
+  }
+
+  .msg-content table.md-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .msg-content table.md-table th {
+    background: #1E1917;
+    font-weight: 700;
+    text-align: left;
+    padding: 7px 10px;
+    color: #F1C674;
+    border-bottom: 1px solid #2C2826;
+    white-space: nowrap;
+  }
+
+  .msg-content table.md-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(44, 40, 38, 0.5);
+    color: #DBD6D2;
+    vertical-align: top;
+  }
+
+  .msg-content table.md-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .msg-content table.md-table tr:hover td {
+    background: rgba(241, 198, 116, 0.04);
+  }
+
+  .msg-content table.md-table td:first-child,
+  .msg-content table.md-table th:first-child {
+    padding-left: 12px;
+  }
+
+  .msg-content table.md-table td:last-child,
+  .msg-content table.md-table th:last-child {
+    padding-right: 12px;
+  }
 </style>
 
 <div id="container" style="position: relative;">
@@ -603,7 +727,17 @@
     </div>
   </div>
 
+  <div id="crash-overlay">
+    <div class="crash-title">Something went wrong</div>
+    <div class="crash-body">Rex encountered an unexpected error. Try reloading the plugin.</div>
+    <button class="crash-reload" onclick="parent.postMessage({ pluginMessage: { type: 'resize', width: 360, height: 215 } }, '*'); location.reload();">Reload Plugin</button>
+  </div>
+
   <div id="chat-container">
+    <div id="connection-lost-bar">
+      <span class="lost-dot"></span>
+      <span>Connection lost — reconnecting...</span>
+    </div>
     <div id="chat-header">
       <span id="chat-header-title"><svg width="61" height="24" viewBox="0 0 61 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 24V0H9.34246C11.0252 0 12.5112 0.289933 13.8006 0.869799C15.1118 1.44966 16.139 2.30873 16.882 3.44698C17.625 4.58524 17.9965 5.99195 17.9965 7.66711C17.9965 9.29933 17.6141 10.6953 16.8492 11.855C16.0843 12.9933 15.0572 13.8524 13.7678 14.4322L19.3405 24H13.6367L7.60509 13.4013L10.8831 15.302H5.08099V24H0ZM5.08099 10.953H9.37524C10.0964 10.953 10.7192 10.8134 11.2437 10.5342C11.7682 10.255 12.1725 9.86846 12.4566 9.3745C12.7626 8.88054 12.9155 8.31141 12.9155 7.66711C12.9155 7.00134 12.7626 6.42148 12.4566 5.92752C12.1725 5.43356 11.7682 5.04698 11.2437 4.76779C10.7192 4.48859 10.0964 4.34899 9.37524 4.34899H5.08099V10.953Z" fill="#F06800"/><path d="M21.8644 24V0H38.2874V4.34899H26.9454V9.79329H37.6318V14.1423H26.9454V19.651H38.2874V24H21.8644Z" fill="#F06800"/><path d="M39.3648 24L47.3633 11.9839L39.3648 0H45.1998L51.6248 9.6H48.7729L55.1651 0H61V0L53.0343 11.9839L61 24H55.1651L48.7729 14.3678L51.6248 14.4L45.1998 24H39.3648Z" fill="#F06800"/></svg></span>
       <div id="chat-header-pill">
@@ -758,6 +892,7 @@
     if (!isForging) return;
     isForging = false;
     activeForgeCount = 0;
+    forgingProgressActive = false;
     container.classList.remove("forging");
 
     // Hide forging status in chat input bar (only if not chat-typing)
@@ -840,8 +975,76 @@
   }
 
   function cyclePhrase() {
+    if (forgingProgressActive) return; // Don't override progress info
     var phrase = pickRandom(forgingPhrases);
     forgingLabel.textContent = phrase;
+  }
+
+  // ─── Command Progress Display ───────────────────────────────────────────
+  var forgingProgressActive = false;
+
+  var COMMAND_LABELS = {
+    CREATE_NODE: "Creating node",
+    UPDATE_NODE: "Updating node",
+    DELETE_NODES: "Deleting nodes",
+    CLONE_NODE: "Cloning node",
+    REPARENT_NODE: "Moving node",
+    REORDER_CHILDREN: "Reordering layers",
+    SET_TEXT: "Setting text",
+    SET_FILLS: "Applying fills",
+    SET_STROKES: "Applying strokes",
+    SET_EFFECTS: "Applying effects",
+    SET_CORNER_RADIUS: "Setting radius",
+    SET_AUTO_LAYOUT: "Setting auto-layout",
+    SET_LAYOUT_CHILD: "Configuring layout",
+    BATCH_SET_LAYOUT_CHILDREN: "Configuring layouts",
+    SET_LAYOUT_GRID: "Setting grid",
+    SET_CONSTRAINTS: "Setting constraints",
+    INSTANTIATE_COMPONENT: "Creating instance",
+    SET_INSTANCE_PROPERTIES: "Setting properties",
+    CREATE_COMPONENT: "Creating component",
+    CREATE_COMPONENT_SET: "Creating variants",
+    ADD_COMPONENT_PROPERTY: "Adding property",
+    EDIT_COMPONENT_PROPERTY: "Editing property",
+    DELETE_COMPONENT_PROPERTY: "Removing property",
+    SET_DESCRIPTION: "Setting description",
+    CREATE_VARIABLE_COLLECTION: "Creating collection",
+    DELETE_VARIABLE_COLLECTION: "Deleting collection",
+    CREATE_VARIABLES: "Creating variables",
+    UPDATE_VARIABLES: "Updating variables",
+    DELETE_VARIABLE: "Deleting variable",
+    RENAME_VARIABLE: "Renaming variable",
+    ADD_MODE: "Adding mode",
+    RENAME_MODE: "Renaming mode",
+    SETUP_DESIGN_TOKENS: "Setting up tokens",
+    CREATE_PAGE: "Creating page",
+    RENAME_PAGE: "Renaming page",
+    DELETE_PAGE: "Deleting page",
+    SET_CURRENT_PAGE: "Switching page",
+    GET_NODE: "Reading node",
+    GET_SELECTION: "Reading selection",
+    SEARCH_NODES: "Searching nodes",
+    SCREENSHOT: "Capturing screenshot",
+    GET_STYLES: "Reading styles",
+    GET_VARIABLES: "Reading variables",
+    GET_COMPONENTS: "Reading components",
+    EXECUTE: "Executing code",
+    PING: "Pinging"
+  };
+
+  function showForgingProgress(msg) {
+    forgingProgressActive = true;
+    var label = COMMAND_LABELS[msg.commandType] || msg.commandType;
+    var text = label + "...";
+    if (msg.queueDepth > 0) {
+      text += " (" + msg.queueDepth + " more queued)";
+    }
+    forgingLabel.textContent = text;
+
+    // Ensure forging UI is visible
+    if (!isForging) {
+      showForging();
+    }
   }
 
   // ─── Context bar (selection) ────────────────────────────────────────────
@@ -941,6 +1144,9 @@
       case "forging-stop":
         hideForging();
         break;
+      case "forging-progress":
+        showForgingProgress(msg);
+        break;
       case "http-request":
         handleHttpRequest(msg);
         break;
@@ -959,6 +1165,10 @@
       case "chat-sent-confirmation":
         handleSentConfirmation(msg);
         break;
+      case "chat-send-error":
+        hideChatTyping();
+        appendChatMessage("error", msg.error || "Failed to send message");
+        break;
       case "chat-chunk":
         handleChatChunk(msg);
         break;
@@ -974,14 +1184,36 @@
     }
   };
 
+  var wasConnected = false;
+  var connectionLostBar = document.getElementById("connection-lost-bar");
+
   function updateStatus(msg) {
     var newTransport = msg.connected ? msg.transport : null;
     if (newTransport === currentTransport) return;
     currentTransport = newTransport;
+
+    // Track connection-lost state
+    if (currentTransport) {
+      wasConnected = true;
+      connectionLostBar.classList.remove("visible");
+    } else if (wasConnected) {
+      connectionLostBar.classList.add("visible");
+    }
+
     if (!isForging) {
       showIdle();
     }
   }
+
+  // Global error handler — show crash overlay
+  window.onerror = function(msg, url, line) {
+    console.error("Uncaught error:", msg, url, line);
+    document.getElementById("crash-overlay").classList.add("visible");
+  };
+  window.onunhandledrejection = function(event) {
+    console.error("Unhandled rejection:", event.reason);
+    document.getElementById("crash-overlay").classList.add("visible");
+  };
 
   function handleHttpRequest(msg) {
     var xhr = new XMLHttpRequest();
@@ -1270,6 +1502,51 @@
     // Numbered lists
     escaped = escaped.replace(/^\d+\. (.+)$/gm, function(match, content) {
       return '<span class="md-bullet">' + match.charAt(0) + '. ' + content + '</span>';
+    });
+
+    // Tables — must be parsed before line breaks
+    escaped = escaped.replace(/((?:^\|.+\|[ ]*\n)+)/gm, function(tableBlock) {
+      var rows = tableBlock.trim().split("\n");
+      if (rows.length < 2) return tableBlock;
+
+      // Check for separator row (|---|---|)
+      var sepIdx = -1;
+      for (var ri = 0; ri < Math.min(rows.length, 3); ri++) {
+        if (/^\|[\s\-:]+(\|[\s\-:]+)+\|?$/.test(rows[ri].trim())) {
+          sepIdx = ri;
+          break;
+        }
+      }
+
+      function parseCells(row) {
+        return row.replace(/^\|/, "").replace(/\|$/, "").split("|").map(function(c) { return c.trim(); });
+      }
+
+      var html = '<div class="md-table-wrap"><table class="md-table">';
+
+      if (sepIdx > 0) {
+        // Has header
+        html += "<thead><tr>";
+        var headers = parseCells(rows[sepIdx - 1]);
+        for (var h = 0; h < headers.length; h++) {
+          html += "<th>" + headers[h] + "</th>";
+        }
+        html += "</tr></thead>";
+      }
+
+      html += "<tbody>";
+      for (var r = 0; r < rows.length; r++) {
+        if (r === sepIdx || (sepIdx > 0 && r === sepIdx - 1)) continue;
+        var cells = parseCells(rows[r]);
+        if (cells.length === 0 || (cells.length === 1 && cells[0] === "")) continue;
+        html += "<tr>";
+        for (var c = 0; c < cells.length; c++) {
+          html += "<td>" + cells[c] + "</td>";
+        }
+        html += "</tr>";
+      }
+      html += "</tbody></table></div>";
+      return html;
     });
 
     // Line breaks

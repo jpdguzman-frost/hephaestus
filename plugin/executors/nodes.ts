@@ -40,57 +40,61 @@ function createSingleNode(type: string): SceneNode {
   }
 }
 
+/** Convert a paint descriptor (solid, gradient, image) to a Figma Paint object. */
+function paintToFigmaPaint(paint: any): Paint | null {
+  switch (paint.type) {
+    case "solid": {
+      const { color, opacity: op } = hexToColor(paint.color);
+      return {
+        type: "SOLID",
+        color,
+        opacity: paint.opacity ?? op,
+        visible: true,
+      };
+    }
+    case "linear-gradient": {
+      const stops: ColorStop[] = paint.stops.map((s: any) => {
+        const { color, opacity: op } = hexToColor(s.color);
+        return { position: s.position, color: { ...color, a: op } };
+      });
+      return {
+        type: "GRADIENT_LINEAR",
+        gradientStops: stops,
+        gradientTransform: [[1, 0, 0], [0, 1, 0]],
+        visible: true,
+      };
+    }
+    case "radial-gradient": {
+      const stops: ColorStop[] = paint.stops.map((s: any) => {
+        const { color, opacity: op } = hexToColor(s.color);
+        return { position: s.position, color: { ...color, a: op } };
+      });
+      return {
+        type: "GRADIENT_RADIAL",
+        gradientStops: stops,
+        gradientTransform: [[1, 0, 0], [0, 1, 0]],
+        visible: true,
+      };
+    }
+    case "image": {
+      return {
+        type: "IMAGE",
+        imageHash: paint.imageHash,
+        scaleMode: paint.scaleMode || "FILL",
+        visible: true,
+      } as ImagePaint;
+    }
+    default:
+      return null;
+  }
+}
+
 function applyFills(node: SceneNode, fills: any[]): void {
   if (!("fills" in node)) return;
   const figmaFills: Paint[] = [];
   for (const fill of fills) {
-    switch (fill.type) {
-      case "solid": {
-        const { color, opacity: op } = hexToColor(fill.color);
-        figmaFills.push({
-          type: "SOLID",
-          color,
-          opacity: fill.opacity ?? op,
-          visible: true,
-        });
-        break;
-      }
-      case "linear-gradient": {
-        const stops: ColorStop[] = fill.stops.map((s: any) => {
-          const { color, opacity: op } = hexToColor(s.color);
-          return { position: s.position, color: { ...color, a: op } };
-        });
-        figmaFills.push({
-          type: "GRADIENT_LINEAR",
-          gradientStops: stops,
-          gradientTransform: [[1, 0, 0], [0, 1, 0]],
-          visible: true,
-        });
-        break;
-      }
-      case "radial-gradient": {
-        const stops: ColorStop[] = fill.stops.map((s: any) => {
-          const { color, opacity: op } = hexToColor(s.color);
-          return { position: s.position, color: { ...color, a: op } };
-        });
-        figmaFills.push({
-          type: "GRADIENT_RADIAL",
-          gradientStops: stops,
-          gradientTransform: [[1, 0, 0], [0, 1, 0]],
-          visible: true,
-        });
-        break;
-      }
-      case "image": {
-        figmaFills.push({
-          type: "IMAGE",
-          imageHash: fill.imageHash,
-          scaleMode: fill.scaleMode || "FILL",
-          visible: true,
-        } as ImagePaint);
-        break;
-      }
-    }
+    const paint = paintToFigmaPaint(fill);
+    if (paint) figmaFills.push(paint);
   }
   (node as GeometryMixin).fills = figmaFills;
 }
@@ -99,15 +103,8 @@ function applyStrokes(node: SceneNode, strokes: any[], weight?: number, align?: 
   if (!("strokes" in node)) return;
   const figmaStrokes: Paint[] = [];
   for (const stroke of strokes) {
-    if (stroke.type === "solid") {
-      const { color, opacity: op } = hexToColor(stroke.color);
-      figmaStrokes.push({
-        type: "SOLID",
-        color,
-        opacity: stroke.opacity ?? op,
-        visible: true,
-      });
-    }
+    const paint = paintToFigmaPaint(stroke);
+    if (paint) figmaStrokes.push(paint);
   }
   (node as GeometryMixin).strokes = figmaStrokes;
   if (weight !== undefined) (node as GeometryMixin).strokeWeight = weight;

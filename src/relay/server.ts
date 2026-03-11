@@ -112,6 +112,7 @@ export class RelayServer {
     // upgrade requests for WebSocket before Fastify processes them.
     this.fastify = Fastify({
       logger: false, // We use our own logger
+      bodyLimit: 10 * 1024 * 1024, // 10MB — screenshots and deep node trees can be large
     });
 
     // CORS: Figma plugin UI iframe has origin "null", must allow cross-origin
@@ -343,21 +344,24 @@ export class RelayServer {
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
   sendChatResponse(response: { id: string; message: string; timestamp: number; isError?: boolean }): void {
-    // Push via WebSocket if connected (instant delivery)
-    if (this.wsClient?.readyState === WebSocket.OPEN) {
-      const msg: WsMessage = {
-        type: "command",
-        id: "chat-response",
-        payload: { chatResponse: response } as unknown as Record<string, unknown>,
-        timestamp: Date.now(),
-      };
-      this.wsClient.send(JSON.stringify(msg));
-      // WS delivered — don't also queue for HTTP polling (prevents duplicates)
-      return;
-    }
-
-    // WS not available — queue for HTTP polling pickup
+    // ALWAYS queue for HTTP polling — this is the reliable baseline.
+    // WebSocket is an optional fast path but can silently fail.
     this.chatOutbox.push(response);
+
+    // Also push via WebSocket for instant delivery (best-effort)
+    if (this.wsClient?.readyState === WebSocket.OPEN) {
+      try {
+        const msg: WsMessage = {
+          type: "command",
+          id: "chat-response",
+          payload: { chatResponse: response } as unknown as Record<string, unknown>,
+          timestamp: Date.now(),
+        };
+        this.wsClient.send(JSON.stringify(msg));
+      } catch {
+        // WS send failed — HTTP polling will deliver it
+      }
+    }
   }
 
   /**
@@ -365,20 +369,23 @@ export class RelayServer {
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
   sendChatChunk(chunk: { id: string; delta: string; done: boolean; timestamp: number }): void {
-    // Push via WebSocket if connected (instant delivery)
-    if (this.wsClient?.readyState === WebSocket.OPEN) {
-      const msg: WsMessage = {
-        type: "command",
-        id: "chat-chunk",
-        payload: { chatChunk: chunk } as unknown as Record<string, unknown>,
-        timestamp: Date.now(),
-      };
-      this.wsClient.send(JSON.stringify(msg));
-      return;
-    }
-
-    // WS not available — queue for HTTP polling
+    // ALWAYS queue for HTTP polling — reliable baseline
     this.chatOutbox.push({ id: chunk.id, message: chunk.delta, timestamp: chunk.timestamp, _isChunk: true, _done: chunk.done } as typeof this.chatOutbox[number]);
+
+    // Also push via WebSocket for instant delivery (best-effort)
+    if (this.wsClient?.readyState === WebSocket.OPEN) {
+      try {
+        const msg: WsMessage = {
+          type: "command",
+          id: "chat-chunk",
+          payload: { chatChunk: chunk } as unknown as Record<string, unknown>,
+          timestamp: Date.now(),
+        };
+        this.wsClient.send(JSON.stringify(msg));
+      } catch {
+        // WS send failed — HTTP polling will deliver it
+      }
+    }
   }
 
   /**
@@ -570,6 +577,13 @@ export class RelayServer {
     // Record the poll
     this.heartbeat.recordPoll();
 
+    // Keep-alive polls only record liveness — don't drain queues or return data
+    const url = new URL(req.url, "http://localhost");
+    if (url.searchParams.get("keepalive") === "1") {
+      reply.code(204);
+      return undefined;
+    }
+
     // Get pending commands
     const pending = this.queue.getPending();
 
@@ -604,12 +618,16 @@ export class RelayServer {
     // Include any pending chat responses
     const chatResponses = this.drainChatResponses();
 
+    // Include remaining queue depth so the plugin can show progress
+    const remainingStats = this.queue.getStats();
+
     return {
       commands,
       pollingInterval: suggestedInterval,
       activity: this.isActive,
       chatResponses,
       chatListening: this.chatListening,
+      queueDepth: remainingStats.pending + remainingStats.inFlight,
     };
   }
 
@@ -789,10 +807,17 @@ export class RelayServer {
   private pushCommandViaWs(command: Command): void {
     if (!this.wsClient || this.wsClient.readyState !== WebSocket.OPEN) return;
 
+    // Include queue depth so the plugin can show progress
+    const stats = this.queue.getStats();
+    const payload = {
+      ...(command as unknown as Record<string, unknown>),
+      _queueDepth: stats.pending + stats.inFlight,
+    };
+
     const msg: WsMessage = {
       type: "command",
       id: command.id,
-      payload: command as unknown as Record<string, unknown>,
+      payload,
       timestamp: Date.now(),
     };
 

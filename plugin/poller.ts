@@ -3,6 +3,7 @@
 // All HTTP requests go through the UI iframe via figma.ui.postMessage.
 
 import { Executor } from "./executor";
+import { postChatResponseDeduped } from "./ws-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -189,7 +190,14 @@ export class Poller {
 
       const connectData = JSON.parse(connectResp.body) as ConnectResponse;
       this.sessionId = connectData.sessionId;
-      this.authToken = (connectData as Record<string, unknown>).authSecret as string || null;
+
+      // Validate auth token — refuse to proceed without one
+      const authSecret = (connectData as Record<string, unknown>).authSecret as string | undefined;
+      if (!authSecret) {
+        console.warn("Server did not provide auth token");
+        return false;
+      }
+      this.authToken = authSecret;
 
       // Apply server-provided config
       if (connectData.config) {
@@ -280,15 +288,11 @@ export class Poller {
           figma.ui.postMessage({ type: chatListeningNow ? "chat-available" : "chat-unavailable" });
         }
 
-        // Forward chat responses to UI
+        // Forward chat responses to UI (deduped against WS-delivered ones)
         var chatResponses = data.chatResponses as Array<{ id: string; message: string }> | undefined;
         if (chatResponses && chatResponses.length > 0) {
           for (var j = 0; j < chatResponses.length; j++) {
-            figma.ui.postMessage({
-              type: "chat-response",
-              message: chatResponses[j].message,
-              id: chatResponses[j].id
-            });
+            postChatResponseDeduped(chatResponses[j].id, chatResponses[j].message);
           }
         }
 
@@ -296,25 +300,58 @@ export class Poller {
           this.lastCommandTime = Date.now();
           nextInterval = this.burstInterval;
 
-          // Execute commands sequentially
-          const results = await this.executor.executeCommands(commands);
+          // Server-reported queue depth (commands still pending on server beyond this batch)
+          var serverQueueDepth = (data.queueDepth as number) || 0;
 
-          // Post results back (with retry on failure)
-          for (var i = 0; i < results.length; i++) {
-            var posted = false;
-            for (var attempt = 0; attempt < 2 && !posted; attempt++) {
-              try {
-                var postResp = await httpRequest("POST", this.baseUrl + "/results", results[i], this.getHeaders(), 10000);
-                if (postResp.status >= 200 && postResp.status < 300) {
-                  posted = true;
-                } else if (postResp.status === 401) {
-                  // Auth expired during execution — reconnect and retry
-                  await this.attemptReconnect();
+          // Keep-alive poll during execution so server doesn't think we disconnected
+          var keepAliveTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
+            httpRequest("GET", this.baseUrl + "/commands?keepalive=1", undefined, this.getHeaders(), 5000)
+              .catch(function() { /* best-effort keep-alive */ });
+          }, 4000);
+
+          try {
+            // Execute commands one by one with progress reporting
+            for (var ci = 0; ci < commands.length; ci++) {
+              var cmd = commands[ci];
+              var remaining = (commands.length - ci - 1) + serverQueueDepth;
+
+              // Report progress to UI
+              figma.ui.postMessage({
+                type: "forging-progress",
+                commandType: cmd.type,
+                current: ci + 1,
+                batchTotal: commands.length,
+                queueDepth: remaining
+              });
+
+              var cmdResult = await this.executor.executeCommand(cmd);
+
+              // Post result back immediately (with retry)
+              var resultPayload: Record<string, unknown> = cmdResult as Record<string, unknown>;
+              var posted = false;
+              for (var attempt = 0; attempt < 3 && !posted; attempt++) {
+                try {
+                  var postResp = await httpRequest("POST", this.baseUrl + "/results", resultPayload, this.getHeaders(), 15000);
+                  if (postResp.status >= 200 && postResp.status < 300) {
+                    posted = true;
+                  } else if (postResp.status === 401) {
+                    await this.attemptReconnect();
+                  } else if (postResp.status === 413) {
+                    console.warn("Result too large (413), truncating and retrying");
+                    resultPayload = truncateResult(resultPayload);
+                  } else {
+                    console.warn("Failed to post result: status " + postResp.status);
+                  }
+                } catch (e) {
+                  console.error("Failed to post result (attempt " + (attempt + 1) + "):", e);
                 }
-              } catch (e) {
-                console.error("Failed to post result (attempt " + (attempt + 1) + "):", e);
+              }
+              if (!posted) {
+                console.error("Giving up posting result for command " + resultPayload.id + " after 3 attempts");
               }
             }
+          } finally {
+            if (keepAliveTimer) { clearInterval(keepAliveTimer); keepAliveTimer = null; }
           }
         }
       } else if (resp.status >= 200 && resp.status < 300 && !resp.body) {
@@ -426,4 +463,55 @@ function generateId(): string {
     result += chars[Math.floor(Math.random() * chars.length)];
   }
   return result;
+}
+
+/**
+ * Truncate an oversized command result so it can be posted.
+ * Strips children, large data fields, and adds a truncation notice.
+ */
+function truncateResult(result: Record<string, unknown>): Record<string, unknown> {
+  var truncated = { id: result.id, status: result.status, duration: result.duration, timestamp: result.timestamp, batchId: result.batchId, batchSeq: result.batchSeq } as Record<string, unknown>;
+
+  if (result.error) {
+    truncated.error = result.error;
+    return truncated;
+  }
+
+  var inner = result.result as Record<string, unknown> | undefined;
+  if (!inner) return truncated;
+
+  // Strip large fields: base64 data, deep children
+  var cleaned = {} as Record<string, unknown>;
+  for (var key in inner) {
+    if (!inner.hasOwnProperty(key)) continue;
+    var val = inner[key];
+
+    // Truncate base64 screenshot data
+    if (key === "data" && typeof val === "string" && val.length > 50000) {
+      cleaned[key] = val.slice(0, 50000);
+      cleaned["_truncated"] = true;
+      cleaned["_originalSize"] = val.length;
+      continue;
+    }
+
+    // Strip deep children arrays
+    if (key === "children" && Array.isArray(val) && JSON.stringify(val).length > 100000) {
+      cleaned[key] = (val as unknown[]).slice(0, 5).map(function(child) {
+        if (child && typeof child === "object" && "children" in (child as Record<string, unknown>)) {
+          var shallow = Object.assign({}, child as Record<string, unknown>);
+          delete shallow.children;
+          shallow._childrenTruncated = true;
+          return shallow;
+        }
+        return child;
+      });
+      cleaned["_childrenTruncated"] = true;
+      continue;
+    }
+
+    cleaned[key] = val;
+  }
+
+  truncated.result = cleaned;
+  return truncated;
 }

@@ -39,6 +39,11 @@ export class WSClient {
   private reconnectAttempt = 0;
   private statusCallback: ((connected: boolean) => void) | null = null;
 
+  // Bounded send queue for messages while disconnected
+  private pendingQueue: WSMessage[] = [];
+  private readonly MAX_QUEUE = 20;
+
+
   // Exponential backoff: 500ms -> 1s -> 2s -> 4s -> 8s -> 15s
   private readonly backoffSchedule = [500, 1000, 2000, 4000, 8000, 15000];
 
@@ -74,6 +79,12 @@ export class WSClient {
         this.reconnecting = false;
         this.reconnectAttempt = 0;
         console.log("WebSocket connected");
+
+        // Flush pending queue
+        while (this.pendingQueue.length > 0) {
+          const queued = this.pendingQueue.shift()!;
+          this.send(queued);
+        }
 
         // Send identification
         this.send({
@@ -120,6 +131,7 @@ export class WSClient {
   disconnect(): void {
     this.shouldReconnect = false;
     this._isConnected = false;
+    this.pendingQueue = [];
 
     figma.ui.postMessage({ type: "ws-disconnect" });
 
@@ -191,12 +203,11 @@ export class WSClient {
           if (message.id === "chat-response" && payload) {
             var chatResp = payload.chatResponse as Record<string, unknown>;
             if (chatResp) {
-              figma.ui.postMessage({
-                type: "chat-response",
-                message: chatResp.message as string,
-                id: chatResp.id as string,
-                isError: (chatResp.isError as boolean) || false
-              });
+              postChatResponseDeduped(
+                chatResp.id as string,
+                chatResp.message as string,
+                (chatResp.isError as boolean) || false
+              );
             }
             break;
           }
@@ -226,6 +237,7 @@ export class WSClient {
           }
 
           var command = payload as unknown as Command;
+          var wsQueueDepth = (payload._queueDepth as number) || 0;
 
           // Send ack immediately
           this.send({
@@ -234,15 +246,45 @@ export class WSClient {
             timestamp: Date.now(),
           });
 
+          // Report progress to UI
+          figma.ui.postMessage({
+            type: "forging-progress",
+            commandType: command.type,
+            current: 1,
+            batchTotal: 1,
+            queueDepth: Math.max(0, wsQueueDepth - 1),
+          });
+
           // Execute and send result
           var result = await this.executor.executeCommand(command);
 
-          this.send({
+          // Check payload size before sending — if too large, truncate
+          var resultMsg: WSMessage = {
             type: "result",
             id: message.id,
             payload: result as unknown as Record<string, unknown>,
             timestamp: Date.now(),
-          });
+          };
+          var serialized = JSON.stringify(resultMsg);
+          if (serialized.length > 4 * 1024 * 1024) {
+            // Over 4MB — truncate large fields
+            console.warn("WS result too large (" + serialized.length + " bytes), truncating");
+            var truncResult = result as Record<string, unknown>;
+            if (truncResult.result && typeof truncResult.result === "object") {
+              var inner = truncResult.result as Record<string, unknown>;
+              if (typeof inner.data === "string" && (inner.data as string).length > 50000) {
+                inner.data = (inner.data as string).slice(0, 50000);
+                inner._truncated = true;
+              }
+              if (Array.isArray(inner.children)) {
+                inner.children = (inner.children as unknown[]).slice(0, 5);
+                inner._childrenTruncated = true;
+              }
+            }
+            resultMsg.payload = truncResult as unknown as Record<string, unknown>;
+          }
+
+          this.send(resultMsg);
           break;
         }
       }
@@ -252,7 +294,14 @@ export class WSClient {
   }
 
   private send(message: WSMessage): void {
-    if (!this._isConnected) return;
+    if (!this._isConnected) {
+      if (this.pendingQueue.length < this.MAX_QUEUE) {
+        this.pendingQueue.push(message);
+      } else {
+        console.warn("WSClient: send queue full, dropping message type=" + message.type);
+      }
+      return;
+    }
 
     figma.ui.postMessage({
       type: "ws-send",
@@ -265,4 +314,25 @@ export class WSClient {
       this.statusCallback(connected);
     }
   }
+}
+
+// ─── Shared Chat Response Deduplication ──────────────────────────────────────
+// Both WS and HTTP polling can deliver the same chat response.
+// This gate ensures each response ID is forwarded to the UI only once.
+
+var seenChatIds = new Set<string>();
+
+export function postChatResponseDeduped(id: string, message: string, isError?: boolean): void {
+  if (seenChatIds.has(id)) return; // Already delivered via the other transport
+  seenChatIds.add(id);
+
+  figma.ui.postMessage({
+    type: "chat-response",
+    message: message,
+    id: id,
+    isError: isError || false
+  });
+
+  // Auto-clean after 60s
+  setTimeout(function() { seenChatIds.delete(id); }, 60000);
 }

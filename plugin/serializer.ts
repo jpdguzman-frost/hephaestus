@@ -68,6 +68,17 @@ export interface SerializedNode {
   children?: SerializedNode[];
   characters?: string;
   textStyle?: SerializedTextStyle;
+  strokeWeight?: number;
+  strokeAlign?: string;
+  dashPattern?: number[];
+  blendMode?: string;
+  clipsContent?: boolean;
+  layoutSizingHorizontal?: string;
+  layoutSizingVertical?: string;
+  minWidth?: number;
+  maxWidth?: number;
+  minHeight?: number;
+  maxHeight?: number;
   componentKey?: string;
   componentProperties?: Record<string, { type: string; value: string | boolean }>;
   circular?: boolean;
@@ -383,6 +394,24 @@ export function serializeNode(node: SceneNode, depth: number = 1, seen: Set<stri
     result.strokes = serializePaints(strokes);
   }
 
+  // Stroke properties
+  if ("strokeWeight" in node) {
+    const sw = (node as GeometryMixin).strokeWeight;
+    if (sw !== figma.mixed) result.strokeWeight = sw;
+  }
+  if ("strokeAlign" in node) {
+    result.strokeAlign = (node as GeometryMixin).strokeAlign;
+  }
+  if ("dashPattern" in node) {
+    const dp = (node as GeometryMixin).dashPattern;
+    if (dp && dp.length > 0) result.dashPattern = [...dp];
+  }
+
+  // Blend mode
+  if ("blendMode" in node) {
+    result.blendMode = (node as BlendMixin).blendMode;
+  }
+
   // Effects
   if ("effects" in node) {
     const effects = (node as BlendMixin).effects;
@@ -405,10 +434,32 @@ export function serializeNode(node: SceneNode, depth: number = 1, seen: Set<stri
     }
   }
 
+  // Clips content (frames only)
+  if ("clipsContent" in node) {
+    result.clipsContent = (node as FrameNode).clipsContent;
+  }
+
   // Auto-layout
   if ("layoutMode" in node) {
     const frameNode = node as FrameNode;
     result.autoLayout = serializeAutoLayout(frameNode);
+  }
+
+  // Layout sizing (auto-layout children)
+  if ("layoutSizingHorizontal" in node) {
+    result.layoutSizingHorizontal = (node as any).layoutSizingHorizontal;
+  }
+  if ("layoutSizingVertical" in node) {
+    result.layoutSizingVertical = (node as any).layoutSizingVertical;
+  }
+
+  // Min/max size constraints
+  if ("minWidth" in node) {
+    const n = node as any;
+    if (n.minWidth !== undefined && n.minWidth !== null) result.minWidth = n.minWidth;
+    if (n.maxWidth !== undefined && n.maxWidth !== null) result.maxWidth = n.maxWidth;
+    if (n.minHeight !== undefined && n.minHeight !== null) result.minHeight = n.minHeight;
+    if (n.maxHeight !== undefined && n.maxHeight !== null) result.maxHeight = n.maxHeight;
   }
 
   // Constraints
@@ -451,12 +502,20 @@ export function serializeNode(node: SceneNode, depth: number = 1, seen: Set<stri
     }
   }
 
-  // Children
+  // Children — cap at 100 to prevent oversized payloads
   if (depth > 0 && "children" in node) {
     const parent = node as ChildrenMixin;
-    result.children = parent.children.map(child =>
+    const maxChildren = 100;
+    const childSlice = parent.children.length > maxChildren
+      ? parent.children.slice(0, maxChildren)
+      : parent.children;
+    result.children = childSlice.map(child =>
       serializeNode(child as SceneNode, depth - 1, new Set(seen))
     );
+    if (parent.children.length > maxChildren) {
+      (result as Record<string, unknown>)._childrenTruncated = true;
+      (result as Record<string, unknown>)._totalChildren = parent.children.length;
+    }
   }
 
   return result;

@@ -2,7 +2,7 @@
 // Polls the relay server for commands, executes them, and posts results.
 // All HTTP requests go through the UI iframe via figma.ui.postMessage.
 
-import { Executor } from "./executor";
+import { Executor, READ_COMMANDS } from "./executor";
 import { postChatResponseDeduped } from "./ws-client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -310,44 +310,60 @@ export class Poller {
           }, 4000);
 
           try {
-            // Execute commands one by one with progress reporting
-            for (var ci = 0; ci < commands.length; ci++) {
-              var cmd = commands[ci];
-              var remaining = (commands.length - ci - 1) + serverQueueDepth;
+            // Partition commands into consecutive read/write groups
+            // Reads within a group execute in parallel; writes execute sequentially
+            var groups = partitionReadWriteGroups(commands);
+            var completedCount = 0;
 
-              // Report progress to UI
-              figma.ui.postMessage({
-                type: "forging-progress",
-                commandType: cmd.type,
-                current: ci + 1,
-                batchTotal: commands.length,
-                queueDepth: remaining
-              });
+            for (var gi = 0; gi < groups.length; gi++) {
+              var group = groups[gi];
 
-              var cmdResult = await this.executor.executeCommand(cmd);
+              if (group.isRead && group.cmds.length > 1) {
+                // Parallel read execution (up to 5 concurrent)
+                var readQueue = group.cmds.slice();
+                while (readQueue.length > 0) {
+                  var batch = readQueue.splice(0, 5);
 
-              // Post result back immediately (with retry)
-              var resultPayload: Record<string, unknown> = cmdResult as Record<string, unknown>;
-              var posted = false;
-              for (var attempt = 0; attempt < 3 && !posted; attempt++) {
-                try {
-                  var postResp = await httpRequest("POST", this.baseUrl + "/results", resultPayload, this.getHeaders(), 15000);
-                  if (postResp.status >= 200 && postResp.status < 300) {
-                    posted = true;
-                  } else if (postResp.status === 401) {
-                    await this.attemptReconnect();
-                  } else if (postResp.status === 413) {
-                    console.warn("Result too large (413), truncating and retrying");
-                    resultPayload = truncateResult(resultPayload);
-                  } else {
-                    console.warn("Failed to post result: status " + postResp.status);
+                  // Report progress for the batch
+                  for (var bi = 0; bi < batch.length; bi++) {
+                    figma.ui.postMessage({
+                      type: "forging-progress",
+                      commandType: batch[bi].type,
+                      current: completedCount + bi + 1,
+                      batchTotal: commands.length,
+                      queueDepth: (commands.length - completedCount - batch.length) + serverQueueDepth,
+                      parallel: true
+                    });
                   }
-                } catch (e) {
-                  console.error("Failed to post result (attempt " + (attempt + 1) + "):", e);
+
+                  var readResults = await Promise.all(
+                    batch.map(function(cmd) { return this.executor.executeCommand(cmd); }.bind(this))
+                  );
+
+                  // Post all results
+                  for (var ri = 0; ri < readResults.length; ri++) {
+                    await this.postResult(readResults[ri] as unknown as Record<string, unknown>);
+                  }
+                  completedCount += batch.length;
                 }
-              }
-              if (!posted) {
-                console.error("Giving up posting result for command " + resultPayload.id + " after 3 attempts");
+              } else {
+                // Sequential execution for writes (or single reads)
+                for (var si = 0; si < group.cmds.length; si++) {
+                  var cmd = group.cmds[si];
+                  var remaining = (commands.length - completedCount - 1) + serverQueueDepth;
+
+                  figma.ui.postMessage({
+                    type: "forging-progress",
+                    commandType: cmd.type,
+                    current: completedCount + 1,
+                    batchTotal: commands.length,
+                    queueDepth: remaining
+                  });
+
+                  var cmdResult = await this.executor.executeCommand(cmd);
+                  await this.postResult(cmdResult as unknown as Record<string, unknown>);
+                  completedCount++;
+                }
               }
             }
           } finally {
@@ -400,6 +416,31 @@ export class Poller {
 
     if (this.polling) {
       this.pollTimer = setTimeout(() => { this.poll(); }, nextInterval);
+    }
+  }
+
+  /** Post a command result back to the relay server with retry logic. */
+  private async postResult(resultPayload: Record<string, unknown>): Promise<void> {
+    var posted = false;
+    for (var attempt = 0; attempt < 3 && !posted; attempt++) {
+      try {
+        var postResp = await httpRequest("POST", this.baseUrl + "/results", resultPayload, this.getHeaders(), 15000);
+        if (postResp.status >= 200 && postResp.status < 300) {
+          posted = true;
+        } else if (postResp.status === 401) {
+          await this.attemptReconnect();
+        } else if (postResp.status === 413) {
+          console.warn("Result too large (413), truncating and retrying");
+          resultPayload = truncateResult(resultPayload);
+        } else {
+          console.warn("Failed to post result: status " + postResp.status);
+        }
+      } catch (e) {
+        console.error("Failed to post result (attempt " + (attempt + 1) + "):", e);
+      }
+    }
+    if (!posted) {
+      console.error("Giving up posting result for command " + resultPayload.id + " after 3 attempts");
     }
   }
 
@@ -463,6 +504,31 @@ function generateId(): string {
     result += chars[Math.floor(Math.random() * chars.length)];
   }
   return result;
+}
+
+/**
+ * Partition commands into consecutive groups of reads vs writes.
+ * Read groups can be executed in parallel; write groups must be sequential.
+ */
+function partitionReadWriteGroups(commands: Command[]): { isRead: boolean; cmds: Command[] }[] {
+  if (commands.length === 0) return [];
+
+  var groups: { isRead: boolean; cmds: Command[] }[] = [];
+  var currentIsRead = READ_COMMANDS.has(commands[0].type);
+  var currentCmds: Command[] = [commands[0]];
+
+  for (var i = 1; i < commands.length; i++) {
+    var isRead = READ_COMMANDS.has(commands[i].type);
+    if (isRead !== currentIsRead) {
+      groups.push({ isRead: currentIsRead, cmds: currentCmds });
+      currentCmds = [];
+      currentIsRead = isRead;
+    }
+    currentCmds.push(commands[i]);
+  }
+  groups.push({ isRead: currentIsRead, cmds: currentCmds });
+
+  return groups;
 }
 
 /**

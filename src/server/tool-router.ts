@@ -37,6 +37,8 @@ type ToolCategory = "plugin" | "rest" | "local";
 interface ToolRoute {
   category: ToolCategory;
   commandType?: CommandType;
+  /** If true, try REST handler first, fall back to plugin on failure. */
+  restFallback?: boolean;
 }
 
 const TOOL_ROUTES: Record<string, ToolRoute> = {
@@ -46,9 +48,9 @@ const TOOL_ROUTES: Record<string, ToolRoute> = {
   get_page:       { category: "plugin", commandType: CommandType.GET_NODE },      // Uses plugin for live data
   search_nodes:   { category: "plugin", commandType: CommandType.SEARCH_NODES },
   screenshot:     { category: "plugin", commandType: CommandType.SCREENSHOT },
-  get_styles:     { category: "plugin", commandType: CommandType.GET_STYLES },
-  get_variables:  { category: "plugin", commandType: CommandType.GET_VARIABLES },
-  get_components: { category: "plugin", commandType: CommandType.GET_COMPONENTS },
+  get_styles:     { category: "plugin", commandType: CommandType.GET_STYLES, restFallback: true },
+  get_variables:  { category: "plugin", commandType: CommandType.GET_VARIABLES, restFallback: true },
+  get_components: { category: "plugin", commandType: CommandType.GET_COMPONENTS, restFallback: true },
 
   // ── Write Tools: Nodes ──────────────────────────────────────────────────
   create_node:        { category: "plugin", commandType: CommandType.CREATE_NODE },
@@ -534,8 +536,22 @@ export async function routeToolCall(
   try {
     // Route based on category
     switch (route.category) {
-      case "plugin":
+      case "plugin": {
+        // REST-first fallback: try REST API, fall back to plugin on failure
+        if (route.restFallback && REST_HANDLERS[toolName]) {
+          try {
+            const result = await REST_HANDLERS[toolName](validatedParams, context);
+            context.logger.debug(`${toolName} served via REST API`);
+            return result;
+          } catch (restErr) {
+            context.logger.warn(
+              `${toolName} REST fallback failed, routing to plugin: ${(restErr as Error).message}`,
+            );
+            // Fall through to plugin
+          }
+        }
         return await handlePluginTool(toolName, validatedParams, route, context);
+      }
 
       case "rest": {
         const handler = REST_HANDLERS[toolName];

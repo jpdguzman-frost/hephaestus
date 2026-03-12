@@ -499,8 +499,8 @@ const EXECUTOR_MAP: Record<string, ExecutorFn> = {
   PING: executePing,
 };
 
-// Read commands that can be interleaved with writes
-const READ_COMMANDS = new Set(["GET_NODE", "GET_SELECTION", "SEARCH_NODES", "SCREENSHOT", "PING", "GET_STYLES", "GET_VARIABLES", "GET_COMPONENTS"]);
+// Read commands that can be executed in parallel (no side effects)
+export const READ_COMMANDS = new Set(["GET_NODE", "GET_SELECTION", "SEARCH_NODES", "SCREENSHOT", "PING", "GET_STYLES", "GET_VARIABLES", "GET_COMPONENTS"]);
 
 // ─── Executor Class ─────────────────────────────────────────────────────────
 
@@ -623,6 +623,81 @@ export class Executor {
     } finally {
       figma.ui.postMessage({ type: "forging-stop" });
     }
+  }
+
+  /**
+   * Check if a command is a read-only operation that can run in parallel.
+   */
+  isReadCommand(command: Command): boolean {
+    return READ_COMMANDS.has(command.type);
+  }
+
+  /**
+   * Execute commands with parallel reads: partitions into consecutive
+   * read/write groups, runs read groups concurrently (up to maxConcurrency),
+   * and write groups sequentially. Preserves ordering between groups.
+   */
+  async executeCommandsParallel(
+    commands: Command[],
+    maxConcurrency: number = 5,
+    onProgress?: (cmd: Command, index: number, total: number) => void,
+  ): Promise<CommandResult[]> {
+    if (commands.length === 0) return [];
+
+    // Partition into consecutive groups of reads vs writes
+    var groups: { isRead: boolean; commands: { cmd: Command; originalIndex: number }[] }[] = [];
+    var currentIsRead = this.isReadCommand(commands[0]);
+    var currentGroup: { cmd: Command; originalIndex: number }[] = [];
+
+    for (var i = 0; i < commands.length; i++) {
+      var cmdIsRead = this.isReadCommand(commands[i]);
+      if (cmdIsRead !== currentIsRead) {
+        groups.push({ isRead: currentIsRead, commands: currentGroup });
+        currentGroup = [];
+        currentIsRead = cmdIsRead;
+      }
+      currentGroup.push({ cmd: commands[i], originalIndex: i });
+    }
+    if (currentGroup.length > 0) {
+      groups.push({ isRead: currentIsRead, commands: currentGroup });
+    }
+
+    // Execute each group
+    var allResults: { index: number; result: CommandResult }[] = [];
+
+    for (var g = 0; g < groups.length; g++) {
+      var group = groups[g];
+
+      if (group.isRead && group.commands.length > 1) {
+        // Parallel execution for reads with concurrency cap
+        var pending: Promise<void>[] = [];
+        var qi = 0;
+
+        while (qi < group.commands.length) {
+          var batch = group.commands.slice(qi, qi + maxConcurrency);
+          pending = batch.map(function(entry) {
+            if (onProgress) onProgress(entry.cmd, entry.originalIndex, commands.length);
+            return this.executeCommand(entry.cmd).then(function(result: CommandResult) {
+              allResults.push({ index: entry.originalIndex, result: result });
+            });
+          }.bind(this));
+          await Promise.all(pending);
+          qi += maxConcurrency;
+        }
+      } else {
+        // Sequential execution for writes (or single reads)
+        for (var s = 0; s < group.commands.length; s++) {
+          var entry = group.commands[s];
+          if (onProgress) onProgress(entry.cmd, entry.originalIndex, commands.length);
+          var result = await this.executeCommand(entry.cmd);
+          allResults.push({ index: entry.originalIndex, result: result });
+        }
+      }
+    }
+
+    // Sort by original index to maintain order
+    allResults.sort(function(a, b) { return a.index - b.index; });
+    return allResults.map(function(r) { return r.result; });
   }
 
   /**

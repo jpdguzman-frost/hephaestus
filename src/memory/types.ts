@@ -49,6 +49,7 @@ export interface MemoryEntry {
 
 export interface MemoryConfig {
   enabled: boolean;
+  serviceUrl?: string;
   mongoUri: string;
   dbName: string;
   teamId: string;

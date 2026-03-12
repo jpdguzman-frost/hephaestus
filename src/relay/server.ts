@@ -15,6 +15,7 @@ import type { ConnectPayload } from "./connection.js";
 import { HeartbeatMonitor } from "./heartbeat.js";
 import { CommentWatcher } from "./comment-watcher.js";
 import { MemoryStore } from "../memory/store.js";
+import { MemoryServiceClient } from "../memory/client.js";
 import { loadMemoryConfig } from "../memory/config.js";
 import type { MemoryConfig } from "../memory/types.js";
 
@@ -62,10 +63,10 @@ export class RelayServer {
 
   // Memory system
   private readonly memoryConfig: MemoryConfig;
-  private _memoryStore: MemoryStore | null = null;
+  private _memoryStore: MemoryStore | MemoryServiceClient | null = null;
 
   /** Access the memory store (null if disabled/not connected). */
-  get memoryStore(): MemoryStore | null {
+  get memoryStore(): MemoryStore | MemoryServiceClient | null {
     return this._memoryStore;
   }
 
@@ -163,8 +164,19 @@ export class RelayServer {
       this.logger.info("WebSocket server ready on upgrade path /ws");
     }
 
-    // Initialize memory store (optional, non-blocking)
-    if (this.memoryConfig.enabled) {
+    // Initialize memory (optional, non-blocking)
+    // Service mode (HTTP client) takes precedence over direct MongoDB
+    if (this.memoryConfig.serviceUrl) {
+      this._memoryStore = new MemoryServiceClient(
+        this.memoryConfig.serviceUrl,
+        this.logger,
+      );
+      this._memoryStore.connect().catch((err) => {
+        this.logger.warn("Memory service connection failed (non-fatal)", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    } else if (this.memoryConfig.enabled) {
       this._memoryStore = new MemoryStore(this.memoryConfig, this.logger);
       this._memoryStore.connect().catch((err) => {
         this.logger.warn("Memory store connection failed (non-fatal)", {

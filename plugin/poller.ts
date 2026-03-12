@@ -164,10 +164,17 @@ export class Poller {
       }
 
       // Step 2: Connect (no auth needed — handshake returns the auth token)
+      // Include user identity from figma.currentUser (requires 'currentuser' permission)
+      var currentUser = figma.currentUser;
       const connectPayload = {
         pluginId: this.pluginId,
         fileKey: figma.fileKey || "unknown",
         fileName: (figma.root && figma.root.name) ? figma.root.name : "Unknown File",
+        user: currentUser ? {
+          id: currentUser.id,
+          name: currentUser.name,
+          photoUrl: currentUser.photoUrl,
+        } : undefined,
         capabilities: {
           maxConcurrent: 1,
           supportedTypes: this.executor.getSupportedTypes(),

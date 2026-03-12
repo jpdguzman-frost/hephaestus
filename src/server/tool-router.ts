@@ -117,6 +117,13 @@ const TOOL_ROUTES: Record<string, ToolRoute> = {
   wait_for_chat:       { category: "local" },
   send_chat_response:  { category: "local" },
   send_chat_chunk:     { category: "local" },
+
+  // ── Memory Tools ──────────────────────────────────────────────────────────
+  remember:        { category: "local" },
+  recall:          { category: "local" },
+  forget:          { category: "local" },
+  memories:        { category: "local" },
+  memory_cleanup:  { category: "local" },
 };
 
 // ─── Handler Types ──────────────────────────────────────────────────────────
@@ -465,11 +472,182 @@ async function handleSendChatChunk(
   return { status: "chunk_sent", messageId };
 }
 
+// ─── Memory Tool Handlers ────────────────────────────────────────────────────
+
+function getMemoryContext(context: ToolContext): {
+  teamId: string;
+  userId?: string;
+  userName?: string;
+  fileKey?: string;
+  pageId?: string;
+} {
+  const connectionInfo = context.relay.connection.getConnectionInfo();
+  const userInfo = connectionInfo["user"] as
+    | { id: string; name: string }
+    | undefined;
+  return {
+    teamId: context.relay.memoryTeamId ?? "default",
+    userId: userInfo?.id,
+    userName: userInfo?.name,
+    fileKey: connectionInfo["fileKey"] as string | undefined,
+    pageId: undefined, // Page ID from plugin context if available
+  };
+}
+
+async function handleRemember(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const store = context.relay.memoryStore;
+  if (!store?.isConnected) {
+    return {
+      status: "disabled",
+      message:
+        "Memory system is not enabled. Set REX_MEMORY_ENABLED=true and configure MongoDB.",
+    };
+  }
+
+  const memCtx = getMemoryContext(context);
+  const entry = await store.remember({
+    scope: (params["scope"] as any) ?? "file",
+    category: (params["category"] as any) ?? "convention",
+    content: params["content"] as string,
+    tags: params["tags"] as string[] | undefined,
+    source: "explicit",
+    context: memCtx,
+  });
+
+  return {
+    status: "stored",
+    id: entry._id,
+    scope: entry.scope,
+    category: entry.category,
+    confidence: entry.confidence,
+  };
+}
+
+async function handleRecall(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const store = context.relay.memoryStore;
+  if (!store?.isConnected) {
+    return { status: "disabled", memories: [] };
+  }
+
+  const memCtx = getMemoryContext(context);
+  const results = await store.recall({
+    query: params["query"] as string,
+    scope: params["scope"] as any,
+    category: params["category"] as any,
+    limit: params["limit"] as number | undefined,
+    context: memCtx,
+  });
+
+  return {
+    memories: results.map((m) => ({
+      id: m._id,
+      scope: m.scope,
+      category: m.category,
+      content: m.content,
+      tags: m.tags,
+      confidence: m.confidence,
+      createdBy: m.createdBy.name,
+      createdAt: m.createdAt,
+      accessCount: m.accessCount,
+    })),
+    count: results.length,
+  };
+}
+
+async function handleForget(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const store = context.relay.memoryStore;
+  if (!store?.isConnected) {
+    return { status: "disabled" };
+  }
+
+  const memCtx = getMemoryContext(context);
+  const deleted = await store.forget(
+    memCtx,
+    params["id"] as string | undefined,
+    params["query"] as string | undefined,
+    params["scope"] as any,
+  );
+
+  return { status: "deleted", count: deleted };
+}
+
+async function handleMemories(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const store = context.relay.memoryStore;
+  if (!store?.isConnected) {
+    return { status: "disabled", memories: [] };
+  }
+
+  const memCtx = getMemoryContext(context);
+  const results = await store.list(
+    memCtx,
+    params["scope"] as any,
+    params["category"] as any,
+    params["limit"] as number | undefined,
+    params["includeSuperseded"] as boolean | undefined,
+  );
+
+  return {
+    memories: results.map((m) => ({
+      id: m._id,
+      scope: m.scope,
+      category: m.category,
+      content: m.content,
+      tags: m.tags,
+      confidence: m.confidence,
+      createdBy: m.createdBy.name,
+      createdAt: m.createdAt,
+      accessCount: m.accessCount,
+      supersededBy: m.supersededBy,
+    })),
+    count: results.length,
+  };
+}
+
+async function handleMemoryCleanup(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const store = context.relay.memoryStore;
+  if (!store?.isConnected) {
+    return { status: "disabled" };
+  }
+
+  const teamId = context.relay.memoryTeamId ?? "default";
+  const result = await store.cleanup(teamId, {
+    dryRun: params["dryRun"] as boolean | undefined,
+    maxAgeDays: params["maxAgeDays"] as number | undefined,
+    minConfidence: params["minConfidence"] as number | undefined,
+    removeSuperseded: params["removeSuperseded"] as boolean | undefined,
+  });
+
+  return {
+    status: result.dryRun ? "preview" : "cleaned",
+    ...result,
+  };
+}
+
 const LOCAL_HANDLERS: Record<string, ToolHandler> = {
   get_status: handleGetStatus,
   wait_for_chat: handleWaitForChat,
   send_chat_response: handleSendChatResponse,
   send_chat_chunk: handleSendChatChunk,
+  remember: handleRemember,
+  recall: handleRecall,
+  forget: handleForget,
+  memories: handleMemories,
+  memory_cleanup: handleMemoryCleanup,
 };
 
 // ─── Main Router ────────────────────────────────────────────────────────────

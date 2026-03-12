@@ -14,6 +14,9 @@ import { ConnectionManager } from "./connection.js";
 import type { ConnectPayload } from "./connection.js";
 import { HeartbeatMonitor } from "./heartbeat.js";
 import { CommentWatcher } from "./comment-watcher.js";
+import { MemoryStore } from "../memory/store.js";
+import { loadMemoryConfig } from "../memory/config.js";
+import type { MemoryConfig } from "../memory/types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +60,20 @@ export class RelayServer {
   // Comment watcher for @rex mentions
   private readonly commentWatcher: CommentWatcher;
 
+  // Memory system
+  private readonly memoryConfig: MemoryConfig;
+  private _memoryStore: MemoryStore | null = null;
+
+  /** Access the memory store (null if disabled/not connected). */
+  get memoryStore(): MemoryStore | null {
+    return this._memoryStore;
+  }
+
+  /** Team ID for memory operations. */
+  get memoryTeamId(): string {
+    return this.memoryConfig.teamId;
+  }
+
   constructor(config: Config, logger: Logger) {
     this.config = config;
     this.logger = logger.child({ component: "relay-server" });
@@ -72,6 +89,9 @@ export class RelayServer {
     this.commentWatcher = new CommentWatcher(config, this.logger, (msg) => {
       this.enqueueChatMessage(msg);
     });
+
+    // Load memory configuration
+    this.memoryConfig = loadMemoryConfig();
 
     this.wireQueueEvents();
   }
@@ -143,6 +163,16 @@ export class RelayServer {
       this.logger.info("WebSocket server ready on upgrade path /ws");
     }
 
+    // Initialize memory store (optional, non-blocking)
+    if (this.memoryConfig.enabled) {
+      this._memoryStore = new MemoryStore(this.memoryConfig, this.logger);
+      this._memoryStore.connect().catch((err) => {
+        this.logger.warn("Memory store connection failed (non-fatal)", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+
     this.logger.info("Relay server started", { host, port });
   }
 
@@ -180,6 +210,12 @@ export class RelayServer {
     this.commentWatcher.stop();
     this.heartbeat.destroy();
     this.queue.destroy();
+
+    // Disconnect memory store
+    if (this._memoryStore) {
+      await this._memoryStore.disconnect();
+      this._memoryStore = null;
+    }
 
     // Close Fastify
     if (this.fastify) {

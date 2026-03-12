@@ -853,6 +853,55 @@ export const sendChatChunkSchema = z.object({
 });
 
 // ============================================================================
+// Memory Tools
+// ============================================================================
+
+const memoryScopeEnum = z.enum(["user", "team", "file", "page"]);
+const memoryCategoryEnum = z.enum([
+  "decision",
+  "convention",
+  "context",
+  "rejection",
+  "relationship",
+  "preference",
+  "correction",
+]);
+
+export const rememberSchema = z.object({
+  content: z.string().describe("What to remember — a design decision, convention, or context"),
+  scope: memoryScopeEnum.optional().describe("Memory scope: user (personal), team (shared), file, or page. Default: file"),
+  category: memoryCategoryEnum.optional().describe("Memory category. Default: convention"),
+  tags: z.array(z.string()).optional().describe("Semantic tags for retrieval"),
+});
+
+export const recallSchema = z.object({
+  query: z.string().describe("What to recall — topic or keyword"),
+  scope: memoryScopeEnum.optional().describe("Filter by scope"),
+  category: memoryCategoryEnum.optional().describe("Filter by category"),
+  limit: z.number().int().min(1).max(50).optional().describe("Max results (default: 10)"),
+});
+
+export const forgetSchema = z.object({
+  id: z.string().optional().describe("Specific memory ID to delete"),
+  query: z.string().optional().describe("Delete memories matching this query"),
+  scope: memoryScopeEnum.optional().describe("Scope filter for query-based deletion"),
+});
+
+export const memoriesSchema = z.object({
+  scope: memoryScopeEnum.optional().describe("Filter by scope"),
+  category: memoryCategoryEnum.optional().describe("Filter by category"),
+  limit: z.number().int().min(1).max(100).optional().describe("Max results (default: 20)"),
+  includeSuperseded: z.boolean().optional().describe("Include superseded memories (default: false)"),
+});
+
+export const memoryCleanupSchema = z.object({
+  dryRun: z.boolean().optional().describe("Preview what would be removed (default: true)"),
+  maxAgeDays: z.number().int().min(1).optional().describe("Remove memories older than N days with 0 access (default: 30)"),
+  minConfidence: z.number().min(0).max(1).optional().describe("Remove memories below this confidence (default: 0.2)"),
+  removeSuperseded: z.boolean().optional().describe("Remove superseded memories (default: true)"),
+});
+
+// ============================================================================
 // Schema Registry — maps tool names to their Zod schemas
 // ============================================================================
 
@@ -931,6 +980,13 @@ export const schemaRegistry = {
   wait_for_chat: waitForChatSchema,
   send_chat_response: sendChatResponseSchema,
   send_chat_chunk: sendChatChunkSchema,
+
+  // Memory
+  remember: rememberSchema,
+  recall: recallSchema,
+  forget: forgetSchema,
+  memories: memoriesSchema,
+  memory_cleanup: memoryCleanupSchema,
 } as const;
 
 export type ToolName = keyof typeof schemaRegistry;

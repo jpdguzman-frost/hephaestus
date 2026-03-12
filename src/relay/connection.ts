@@ -6,12 +6,20 @@ import type { Logger } from "../shared/logger.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/** User identity from the Figma plugin (via figma.currentUser). */
+export interface PluginUser {
+  id: string;
+  name: string;
+  photoUrl?: string | null;
+}
+
 /** Plugin connection info stored during an active session. */
 export interface PluginSession {
   sessionId: string;
   pluginId: string;
   fileKey: string;
   fileName: string;
+  user?: PluginUser;
   capabilities?: PluginCapabilities;
   connectedAt: number;
   lastHeartbeat: number;
@@ -31,6 +39,7 @@ export interface ConnectPayload {
   pluginId: string;
   fileKey: string;
   fileName: string;
+  user?: PluginUser;
   authResponse?: string;
   capabilities?: PluginCapabilities;
 }
@@ -129,6 +138,7 @@ export class ConnectionManager {
       pluginId: payload.pluginId,
       fileKey: payload.fileKey,
       fileName: payload.fileName,
+      user: payload.user,
       capabilities: payload.capabilities,
       connectedAt: now,
       lastHeartbeat: now,
@@ -251,6 +261,7 @@ export class ConnectionManager {
       pluginId: this._session.pluginId,
       fileKey: this._session.fileKey,
       fileName: this._session.fileName,
+      user: this._session.user,
       lastHeartbeat: new Date(this._session.lastHeartbeat).toISOString(),
       uptime: Date.now() - this._session.connectedAt,
     };

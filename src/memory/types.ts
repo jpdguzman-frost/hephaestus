@@ -1,0 +1,66 @@
+// ─── Rex Memory Types ────────────────────────────────────────────────────────
+
+export type MemoryScope = "user" | "team" | "file" | "page";
+
+export type MemoryCategory =
+  | "decision"
+  | "convention"
+  | "context"
+  | "rejection"
+  | "relationship"
+  | "preference"
+  | "correction";
+
+export type MemorySource = "explicit" | "inferred" | "corrected";
+
+export interface MemoryUser {
+  id: string;
+  name: string;
+}
+
+export interface MemoryEntry {
+  _id: string;
+  scope: MemoryScope;
+
+  // Scope keys
+  teamId: string;
+  userId?: string;
+  fileKey?: string;
+  pageId?: string;
+
+  // Content
+  category: MemoryCategory;
+  content: string;
+  tags: string[];
+
+  // Provenance
+  source: MemorySource;
+  createdBy: MemoryUser;
+  createdAt: Date;
+  updatedAt: Date;
+  lastAccessedAt: Date;
+
+  // Lifecycle
+  confidence: number;
+  supersededBy?: string;
+  relatedTo?: string[];
+  accessCount: number;
+}
+
+export interface MemoryConfig {
+  enabled: boolean;
+  mongoUri: string;
+  dbName: string;
+  teamId: string;
+  maxMemoriesPerSession: number;
+  cleanupIntervalHours: number;
+}
+
+/** Context passed to memory operations from the active session. */
+export interface MemoryContext {
+  teamId: string;
+  userId?: string;
+  userName?: string;
+  fileKey?: string;
+  pageId?: string;
+}

@@ -167,6 +167,18 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     "Send a response message back to the Figma plugin chat interface. After calling this, you MUST call wait_for_chat again immediately to continue listening for the next message.",
   send_chat_chunk:
     "Send a streaming text chunk to the Figma plugin chat. Call multiple times with done:false for each chunk, then once with done:true for the final chunk. This creates a real-time typing effect in the plugin.",
+
+  // ── Memory Tools ──────────────────────────────────────────────────────────
+  remember:
+    "Store a persistent memory — design decisions, conventions, project context, or corrections. Shared across sessions and team members. Use this to build up project knowledge over time.",
+  recall:
+    "Query stored memories by topic. Returns relevant memories from all scopes (user, team, file, page) ranked by confidence and recency.",
+  forget:
+    "Delete a specific memory by ID or remove memories matching a search query.",
+  memories:
+    "List and browse all stored memories. Filter by scope (user/team/file/page) and category (decision/convention/context/etc).",
+  memory_cleanup:
+    "Remove stale, low-confidence, and superseded memories. Run with dryRun:true first to preview what would be removed.",
 };
 
 // ─── Schema Conversion ─────────────────────────────────────────────────────

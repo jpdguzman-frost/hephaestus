@@ -1,0 +1,14 @@
+{
+  "name": "rex-memory-service",
+  "version": "1.0.0",
+  "description": "Shared memory service for Rex — persistent design knowledge across sessions and team members",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1",
+    "mongodb": "^6.12.0"
+  }
+}

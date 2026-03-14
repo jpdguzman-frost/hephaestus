@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rex Setup Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #1E1B19;
+    --surface: #2E2A28;
+    --surface-raised: #3B3634;
+    --gold: #F1C674;
+    --gold-dim: #F8C680;
+    --orange: #F06800;
+    --text: #F5F0EB;
+    --text-dim: #A89E95;
+    --green: #4ADE80;
+    --red: #F87171;
+    --blue: #60A5FA;
+    --radius: 12px;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    padding: 80px 20px 60px;
+    background: linear-gradient(180deg, #302A24 0%, var(--bg) 100%);
+  }
+
+  .hero-logo {
+    font-size: 64px;
+    margin-bottom: 8px;
+  }
+
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--gold);
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .hero p {
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .hero .version-badge {
+    display: inline-block;
+    background: var(--surface);
+    color: var(--gold-dim);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-top: 16px;
+    border: 1px solid rgba(241, 198, 116, 0.15);
+  }
+
+  /* ── Container ── */
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ── Overview cards ── */
+  .overview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: -20px 0 48px;
+  }
+
+  .overview-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .overview-card .icon { font-size: 28px; margin-bottom: 8px; }
+  .overview-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .overview-card p { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+  /* ── Prerequisites ── */
+  .prereq-box {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 48px;
+    border: 1px solid rgba(241, 198, 116, 0.12);
+  }
+
+  .prereq-box h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--gold);
+    margin-bottom: 16px;
+  }
+
+  .prereq-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .prereq-item:last-child { margin-bottom: 0; }
+
+  .prereq-check {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(74, 222, 128, 0.1);
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .prereq-item h4 { font-size: 14px; font-weight: 600; }
+  .prereq-item p { font-size: 13px; color: var(--text-dim); }
+  .prereq-item a { color: var(--blue); text-decoration: none; }
+  .prereq-item a:hover { text-decoration: underline; }
+
+  /* ── Steps ── */
+  .step {
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--orange), #D45A00);
+    color: white;
+    font-size: 18px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .step-body {
+    margin-left: 56px;
+  }
+
+  .step-body p {
+    font-size: 15px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  .step-body p strong {
+    color: var(--text);
+  }
+
+  /* ── Substeps ── */
+  .substep {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+  }
+
+  .substep-marker {
+    background: var(--surface-raised);
+    color: var(--gold-dim);
+    font-size: 12px;
+    font-weight: 700;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .substep-text {
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .substep-text .dim { color: var(--text-dim); }
+
+  /* ── Code block ── */
+  .code-block {
+    background: #151311;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text);
+    position: relative;
+    overflow-x: auto;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .code-block .comment { color: #6A9955; }
+  .code-block .key { color: var(--blue); }
+  .code-block .string { color: #CE9178; }
+  .code-block .bracket { color: var(--text-dim); }
+
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--surface-raised);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .copy-btn:hover { background: var(--surface); color: var(--text); }
+  .copy-btn.copied { background: rgba(74, 222, 128, 0.15); color: var(--green); border-color: rgba(74, 222, 128, 0.2); }
+
+  /* ── Callout ── */
+  .callout {
+    background: rgba(241, 198, 116, 0.06);
+    border-left: 3px solid var(--gold);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .callout strong { color: var(--gold-dim); }
+
+  .callout-warning {
+    background: rgba(248, 113, 113, 0.06);
+    border-left-color: var(--red);
+  }
+
+  .callout-warning strong { color: var(--red); }
+
+  /* ── Path display ── */
+  .path-display {
+    display: inline-block;
+    background: var(--surface);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    color: var(--gold-dim);
+    border: 1px solid rgba(241, 198, 116, 0.1);
+    word-break: break-all;
+  }
+
+  /* ── Visual instruction (screenshot replacement) ── */
+  .visual-instruction {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin: 16px 0;
+    border: 1px solid rgba(255,255,255,0.05);
+    text-align: center;
+  }
+
+  .visual-instruction .menu-path {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin: 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .menu-path .arrow {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .menu-path .highlight {
+    color: var(--gold);
+  }
+
+  /* ── Diagram ── */
+  .arch-diagram {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 32px 24px;
+    margin: 24px 0;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .arch-flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .arch-node {
+    background: var(--bg);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 20px;
+    text-align: center;
+    min-width: 120px;
+  }
+
+  .arch-node .icon { font-size: 24px; margin-bottom: 4px; }
+  .arch-node .label { font-size: 13px; font-weight: 600; }
+  .arch-node .sublabel { font-size: 11px; color: var(--text-dim); }
+
+  .arch-arrow {
+    font-size: 20px;
+    color: var(--gold-dim);
+  }
+
+  /* ── Tab selector for AI clients ── */
+  .tab-group {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 16px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-dim);
+    transition: all 0.15s;
+    border: none;
+    background: none;
+    font-family: inherit;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface-raised); color: var(--gold); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Quick start terminal ── */
+  .terminal-block {
+    background: #0D0B0A;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 16px 0;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .terminal-titlebar {
+    background: #1A1715;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .terminal-dot.red { background: #FF5F57; }
+  .terminal-dot.yellow { background: #FFBD2E; }
+  .terminal-dot.green { background: #28CA41; }
+
+  .terminal-title {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: 8px;
+    font-weight: 500;
+  }
+
+  .terminal-body {
+    padding: 16px 20px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13.5px;
+    line-height: 1.8;
+  }
+
+  .terminal-body .prompt { color: var(--green); }
+  .terminal-body .cmd { color: var(--text); }
+  .terminal-body .output { color: var(--text-dim); }
+
+  /* ── Troubleshooting ── */
+  .trouble-section { margin-top: 60px; }
+
+  .trouble-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    border: 1px solid rgba(255,255,255,0.05);
+    overflow: hidden;
+  }
+
+  .trouble-q {
+    padding: 16px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+
+  .trouble-q:hover { background: var(--surface-raised); }
+
+  .trouble-q .toggle {
+    color: var(--text-dim);
+    font-size: 18px;
+    transition: transform 0.2s;
+  }
+
+  .trouble-a {
+    padding: 0 20px 16px;
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    display: none;
+  }
+
+  .trouble-item.open .trouble-a { display: block; }
+  .trouble-item.open .toggle { transform: rotate(45deg); }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: 60px;
+  }
+
+  /* ── Quick start option ── */
+  .quick-start-box {
+    background: linear-gradient(135deg, rgba(240, 104, 0, 0.1), rgba(241, 198, 116, 0.06));
+    border: 1px solid rgba(240, 104, 0, 0.2);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 48px;
+    text-align: center;
+  }
+
+  .quick-start-box h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+
+  .quick-start-box p {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .overview { grid-template-columns: 1fr; }
+    .step-body { margin-left: 0; margin-top: 12px; }
+    .arch-flow { flex-direction: column; }
+    .arch-arrow { transform: rotate(90deg); }
+    .hero h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HERO ═══════════ -->
+<div class="hero">
+  <div class="hero-logo">⚒️</div>
+  <h1>Rex Setup Guide</h1>
+  <p>Get your AI-to-Figma bridge running in 5 minutes</p>
+  <div class="version-badge">v0.2.0</div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════ OVERVIEW CARDS ═══════════ -->
+<div class="overview">
+  <div class="overview-card">
+    <div class="icon">🖥️</div>
+    <h3>MCP Server</h3>
+    <p>Runs on your machine and connects your AI client to Figma via a local bridge.</p>
+  </div>
+  <div class="overview-card">
+    <div class="icon">🎨</div>
+    <h3>Figma Plugin</h3>
+    <p>A small plugin inside Figma that executes AI commands on the canvas.</p>
+  </div>
+</div>
+
+<!-- ═══════════ HOW IT WORKS ═══════════ -->
+<div class="arch-diagram">
+  <div style="font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--text-dim);">How Rex works</div>
+  <div class="arch-flow">
+    <div class="arch-node">
+      <div class="icon">🤖</div>
+      <div class="label">AI Client</div>
+      <div class="sublabel">Claude, Cursor, etc.</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-node" style="border-color: rgba(241,198,116,0.2);">
+      <div class="icon">⚒️</div>
+      <div class="label" style="color: var(--gold);">Rex Server</div>
+      <div class="sublabel">localhost:7780</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-node">
+      <div class="icon">🎨</div>
+      <div class="label">Figma Plugin</div>
+      <div class="sublabel">In your Figma app</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PREREQUISITES ═══════════ -->
+<div class="prereq-box">
+  <h2>Before You Start</h2>
+  <div class="prereq-item">
+    <div class="prereq-check">✓</div>
+    <div>
+      <h4>Node.js (v20 or newer)</h4>
+      <p>Download from <a href="https://nodejs.org" target="_blank">nodejs.org</a> — click the big green LTS button and run the installer.</p>
+    </div>
+  </div>
+  <div class="prereq-item">
+    <div class="prereq-check">✓</div>
+    <div>
+      <h4>Figma Desktop App</h4>
+      <p>The plugin requires the desktop app (not the browser version). Download from <a href="https://figma.com/downloads" target="_blank">figma.com/downloads</a>.</p>
+    </div>
+  </div>
+  <div class="prereq-item">
+    <div class="prereq-check">✓</div>
+    <div>
+      <h4>An AI Client</h4>
+      <p>Claude Desktop, Claude Code, Cursor, or Windsurf — any MCP-compatible client.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ QUICK START ═══════════ -->
+<div class="quick-start-box">
+  <h2>Quick Start (Recommended)</h2>
+  <p>Open Terminal and run this single command. It will do everything for you.</p>
+  <div class="terminal-block" style="text-align: left;">
+    <div class="terminal-titlebar">
+      <div class="terminal-dot red"></div>
+      <div class="terminal-dot yellow"></div>
+      <div class="terminal-dot green"></div>
+      <div class="terminal-title">Terminal</div>
+    </div>
+    <div class="terminal-body">
+      <span class="prompt">$</span> <span class="cmd" id="install-cmd">cd <span class="install-path">/path/to/rex-dist</span> && bash install.sh</span>
+      <button class="copy-btn" style="position: absolute; top: 38px; right: 10px;" onclick="copyInstallCmd()">Copy</button>
+    </div>
+  </div>
+  <p style="margin-bottom: 0; font-size: 13px;">
+    <strong style="color: var(--text);">How to open Terminal:</strong>
+    Press <kbd style="background: var(--surface); padding: 2px 8px; border-radius: 4px; font-size: 12px;">⌘ Space</kbd>, type <strong style="color: var(--text);">Terminal</strong>, press Enter.
+  </p>
+</div>
+
+<!-- ═══════════ STEP 1 ═══════════ -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">1</div>
+    <h2>Install the MCP Server</h2>
+  </div>
+  <div class="step-body">
+    <p>If you used the Quick Start above, this is already done! Otherwise, follow these steps manually.</p>
+
+    <div class="substep">
+      <div class="substep-marker">a</div>
+      <div class="substep-text">
+        Open <strong>Terminal</strong> <span class="dim">(press ⌘ Space, type "Terminal", press Enter)</span>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">b</div>
+      <div class="substep-text">
+        Navigate to the <code class="path-display">rex-dist/server</code> folder:
+      </div>
+    </div>
+
+    <div class="terminal-block">
+      <div class="terminal-titlebar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">Terminal</div>
+      </div>
+      <div class="terminal-body">
+        <span class="prompt">$</span> <span class="cmd">cd <span class="install-path">/path/to/rex-dist</span>/server</span><br>
+        <span class="prompt">$</span> <span class="cmd">npm install --production</span><br>
+        <span class="output">added 86 packages in 5s</span>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">c</div>
+      <div class="substep-text">
+        Copy the <code class="path-display">server</code> and <code class="path-display">plugin</code> folders to a permanent home:
+      </div>
+    </div>
+
+    <div class="terminal-block">
+      <div class="terminal-titlebar">
+        <div class="terminal-dot red"></div>
+        <div class="terminal-dot yellow"></div>
+        <div class="terminal-dot green"></div>
+        <div class="terminal-title">Terminal</div>
+      </div>
+      <div class="terminal-body">
+        <span class="prompt">$</span> <span class="cmd">mkdir -p ~/rex</span><br>
+        <span class="prompt">$</span> <span class="cmd">cp -r server plugin ~/rex/</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ STEP 2 ═══════════ -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">2</div>
+    <h2>Import the Figma Plugin</h2>
+  </div>
+  <div class="step-body">
+    <p>This adds Rex as a development plugin in your Figma app.</p>
+
+    <div class="substep">
+      <div class="substep-marker">a</div>
+      <div class="substep-text">Open the <strong>Figma Desktop</strong> app</div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">b</div>
+      <div class="substep-text">Open any file, then find the plugin import menu:</div>
+    </div>
+
+    <div class="visual-instruction">
+      <div style="font-size: 13px; color: var(--text-dim); margin-bottom: 8px;">Navigate to:</div>
+      <div class="menu-path">
+        <span>Figma Menu</span>
+        <span class="arrow">▸</span>
+        <span>Plugins</span>
+        <span class="arrow">▸</span>
+        <span>Development</span>
+        <span class="arrow">▸</span>
+        <span class="highlight">Import plugin from manifest...</span>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">c</div>
+      <div class="substep-text">
+        In the file picker, navigate to:
+        <br><code class="path-display" style="margin-top: 6px;">~/rex/plugin/manifest.json</code>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>Tip:</strong> In the file picker, press <kbd style="background: var(--surface); padding: 1px 6px; border-radius: 3px; font-size: 12px;">⌘ Shift G</kbd> to open the "Go to Folder" dialog, then type <code>~/rex/plugin</code> and press Enter. Select <code>manifest.json</code>.
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">d</div>
+      <div class="substep-text">
+        You should see <strong>"Rex"</strong> appear under Plugins → Development. That's it!
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ STEP 3 ═══════════ -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">3</div>
+    <h2>Configure Your AI Client</h2>
+  </div>
+  <div class="step-body">
+    <p>Tell your AI client how to find the Rex server. Pick your client below:</p>
+
+    <div class="tab-group">
+      <button class="tab active" onclick="switchTab('claude-desktop')">Claude Desktop</button>
+      <button class="tab" onclick="switchTab('claude-code')">Claude Code</button>
+      <button class="tab" onclick="switchTab('cursor')">Cursor</button>
+      <button class="tab" onclick="switchTab('windsurf')">Windsurf</button>
+    </div>
+
+    <!-- Claude Desktop -->
+    <div class="tab-content active" id="tab-claude-desktop">
+      <div class="substep">
+        <div class="substep-marker">a</div>
+        <div class="substep-text">Open <strong>Claude Desktop</strong> → Settings (⌘ ,) → <strong>Developer</strong> → <strong>Edit Config</strong></div>
+      </div>
+      <div class="substep">
+        <div class="substep-marker">b</div>
+        <div class="substep-text">This opens a JSON file. Replace its contents with:</div>
+      </div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyConfig('claude-desktop-config')">Copy</button>
+<pre id="claude-desktop-config"><span class="bracket">{</span>
+  <span class="key">"mcpServers"</span>: <span class="bracket">{</span>
+    <span class="key">"rex"</span>: <span class="bracket">{</span>
+      <span class="key">"command"</span>: <span class="string">"node"</span>,
+      <span class="key">"args"</span>: [<span class="string config-path">"~/rex/server/index.js"</span>]
+    <span class="bracket">}</span>
+  <span class="bracket">}</span>
+<span class="bracket">}</span></pre>
+      </div>
+      <div class="substep">
+        <div class="substep-marker">c</div>
+        <div class="substep-text">Save the file (⌘ S) and <strong>restart Claude Desktop</strong></div>
+      </div>
+      <div class="callout">
+        <strong>Note:</strong> If you already have other MCP servers configured, add the <code>"rex"</code> entry inside your existing <code>"mcpServers"</code> object — don't replace the whole file.
+      </div>
+    </div>
+
+    <!-- Claude Code -->
+    <div class="tab-content" id="tab-claude-code">
+      <div class="substep">
+        <div class="substep-marker">a</div>
+        <div class="substep-text">Run this command in Terminal to add Rex globally:</div>
+      </div>
+      <div class="terminal-block">
+        <div class="terminal-titlebar">
+          <div class="terminal-dot red"></div>
+          <div class="terminal-dot yellow"></div>
+          <div class="terminal-dot green"></div>
+          <div class="terminal-title">Terminal</div>
+        </div>
+        <div class="terminal-body">
+          <span class="prompt">$</span> <span class="cmd">claude mcp add rex node ~/rex/server/index.js</span>
+        </div>
+      </div>
+      <p>That's it! Rex will be available in all Claude Code sessions.</p>
+    </div>
+
+    <!-- Cursor -->
+    <div class="tab-content" id="tab-cursor">
+      <div class="substep">
+        <div class="substep-marker">a</div>
+        <div class="substep-text">Open <strong>Cursor</strong> → Settings (⌘ ,) → Search <strong>"MCP"</strong></div>
+      </div>
+      <div class="substep">
+        <div class="substep-marker">b</div>
+        <div class="substep-text">Click <strong>Add new MCP Server</strong> and enter:</div>
+      </div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyConfig('cursor-config')">Copy</button>
+<pre id="cursor-config"><span class="bracket">{</span>
+  <span class="key">"mcpServers"</span>: <span class="bracket">{</span>
+    <span class="key">"rex"</span>: <span class="bracket">{</span>
+      <span class="key">"command"</span>: <span class="string">"node"</span>,
+      <span class="key">"args"</span>: [<span class="string config-path">"~/rex/server/index.js"</span>]
+    <span class="bracket">}</span>
+  <span class="bracket">}</span>
+<span class="bracket">}</span></pre>
+      </div>
+    </div>
+
+    <!-- Windsurf -->
+    <div class="tab-content" id="tab-windsurf">
+      <div class="substep">
+        <div class="substep-marker">a</div>
+        <div class="substep-text">Open <strong>Windsurf</strong> → Settings → <strong>MCP</strong> → <strong>Add Server</strong></div>
+      </div>
+      <div class="substep">
+        <div class="substep-marker">b</div>
+        <div class="substep-text">Add the following configuration:</div>
+      </div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyConfig('windsurf-config')">Copy</button>
+<pre id="windsurf-config"><span class="bracket">{</span>
+  <span class="key">"mcpServers"</span>: <span class="bracket">{</span>
+    <span class="key">"rex"</span>: <span class="bracket">{</span>
+      <span class="key">"command"</span>: <span class="string">"node"</span>,
+      <span class="key">"args"</span>: [<span class="string config-path">"~/rex/server/index.js"</span>]
+    <span class="bracket">}</span>
+  <span class="bracket">}</span>
+<span class="bracket">}</span></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ STEP 4 ═══════════ -->
+<div class="step">
+  <div class="step-header">
+    <div class="step-number">4</div>
+    <h2>Verify It Works</h2>
+  </div>
+  <div class="step-body">
+    <div class="substep">
+      <div class="substep-marker">a</div>
+      <div class="substep-text">Open a file in <strong>Figma Desktop</strong></div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">b</div>
+      <div class="substep-text">Run the Rex plugin:</div>
+    </div>
+
+    <div class="visual-instruction">
+      <div style="font-size: 13px; color: var(--text-dim); margin-bottom: 8px;">Navigate to:</div>
+      <div class="menu-path">
+        <span>Plugins</span>
+        <span class="arrow">▸</span>
+        <span>Development</span>
+        <span class="arrow">▸</span>
+        <span class="highlight">Rex</span>
+      </div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">c</div>
+      <div class="substep-text">The Rex plugin window should appear with a <strong style="color: var(--orange);">connecting</strong> status</div>
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">d</div>
+      <div class="substep-text">Open your AI client and try a command like:</div>
+    </div>
+
+    <div class="code-block" style="font-style: italic; color: var(--text-dim);">
+      "Create a 200x200 red rectangle on the canvas"
+    </div>
+
+    <div class="substep">
+      <div class="substep-marker">e</div>
+      <div class="substep-text">The Rex plugin status should change to <strong style="color: var(--green);">connected</strong> and you should see the rectangle appear in Figma!</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ TROUBLESHOOTING ═══════════ -->
+<div class="trouble-section">
+  <div class="step-header" style="margin-bottom: 24px;">
+    <div class="step-number" style="background: var(--surface-raised); color: var(--text-dim);">?</div>
+    <h2>Troubleshooting</h2>
+  </div>
+
+  <div class="trouble-item">
+    <div class="trouble-q" onclick="toggleTrouble(this)">
+      "node" is not recognized / command not found
+      <span class="toggle">+</span>
+    </div>
+    <div class="trouble-a">
+      Node.js isn't installed or isn't in your PATH.
+      <br><br>
+      <strong>Fix:</strong> Download and install Node.js from <a href="https://nodejs.org" target="_blank" style="color: var(--blue);">nodejs.org</a> (use the LTS version). After installing, <strong>close and reopen Terminal</strong> before trying again.
+    </div>
+  </div>
+
+  <div class="trouble-item">
+    <div class="trouble-q" onclick="toggleTrouble(this)">
+      Rex plugin shows "connecting" but never connects
+      <span class="toggle">+</span>
+    </div>
+    <div class="trouble-a">
+      The MCP server isn't running. The server only starts when your AI client launches it.
+      <br><br>
+      <strong>Fix:</strong> Make sure your AI client (Claude Desktop, etc.) is open and has the Rex MCP config added. Try restarting the AI client. The plugin will connect automatically once the server starts.
+    </div>
+  </div>
+
+  <div class="trouble-item">
+    <div class="trouble-q" onclick="toggleTrouble(this)">
+      I can't find ~/rex/plugin in the Figma file picker
+      <span class="toggle">+</span>
+    </div>
+    <div class="trouble-a">
+      <strong>Fix:</strong> In the Figma file picker, press <strong>⌘ Shift G</strong> to open "Go to Folder". Type <code>~/rex/plugin</code> and press Enter. Then select <code>manifest.json</code>.
+    </div>
+  </div>
+
+  <div class="trouble-item">
+    <div class="trouble-q" onclick="toggleTrouble(this)">
+      Port 7780 is already in use
+      <span class="toggle">+</span>
+    </div>
+    <div class="trouble-a">
+      Another instance of Rex (or another app) is using port 7780.
+      <br><br>
+      <strong>Fix:</strong> Open Terminal and run:
+      <div class="code-block" style="margin-top: 8px; font-size: 12px;">lsof -i :7780 | grep LISTEN</div>
+      This shows what's using the port. If it's a previous Rex instance, kill it with:
+      <div class="code-block" style="margin-top: 8px; font-size: 12px;">kill $(lsof -ti :7780)</div>
+    </div>
+  </div>
+
+  <div class="trouble-item">
+    <div class="trouble-q" onclick="toggleTrouble(this)">
+      Claude Desktop shows "rex" as disconnected / failed
+      <span class="toggle">+</span>
+    </div>
+    <div class="trouble-a">
+      The path to the server file may be incorrect.
+      <br><br>
+      <strong>Fix:</strong> Open Terminal and verify the file exists:
+      <div class="code-block" style="margin-top: 8px; font-size: 12px;">ls ~/rex/server/index.js</div>
+      If it says "No such file or directory", re-run the install script. Also make sure you're using the full absolute path (starting with <code>/Users/yourname/</code>) in the config, not <code>~</code> — some clients don't expand the tilde.
+      <br><br>
+      Replace <code>~/rex/server/index.js</code> in the config with:
+      <div class="code-block" style="margin-top: 8px; font-size: 12px;"><span class="config-path-full"></span></div>
+    </div>
+  </div>
+
+  <div class="trouble-item">
+    <div class="trouble-q" onclick="toggleTrouble(this)">
+      I need to use a different AI client not listed here
+      <span class="toggle">+</span>
+    </div>
+    <div class="trouble-a">
+      Rex works with any MCP-compatible client. The config is always the same — you just need to tell the client to run:
+      <div class="code-block" style="margin-top: 8px; font-size: 12px;">node ~/rex/server/index.js</div>
+      Check your client's documentation for how to add MCP servers.
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<div class="footer">
+  Rex v0.2.0 — Built with ⚒️
+</div>
+
+<!-- ═══════════ SCRIPTS ═══════════ -->
+<script>
+  // ── Resolve home directory for display ──
+  const homePlaceholder = '~/rex/server/index.js';
+
+  // ── Tab switching ──
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+    event.target.classList.add('active');
+  }
+
+  // ── Copy config ──
+  function copyConfig(id) {
+    const el = document.getElementById(id);
+    const text = el.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = el.parentElement.querySelector('.copy-btn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  // ── Copy install command ──
+  function copyInstallCmd() {
+    const el = document.getElementById('install-cmd');
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      const btn = el.parentElement.querySelector('.copy-btn');
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  // ── Troubleshooting toggles ──
+  function toggleTrouble(el) {
+    el.parentElement.classList.toggle('open');
+  }
+
+  // ── Fill in absolute path for users who need it ──
+  const absolutePath = '/Users/' + 'USERNAME' + '/rex/server/index.js';
+  document.querySelectorAll('.config-path-full').forEach(el => {
+    el.textContent = absolutePath;
+    el.style.color = '#CE9178';
+  });
+</script>
+
+</body>
+</html>

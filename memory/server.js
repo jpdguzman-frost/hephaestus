@@ -40,8 +40,7 @@ router.get('/api/health', (req, res) => {
 
 router.get('/api/stats', async (req, res) => {
   try {
-    const teamId = req.query.teamId || 'default';
-    const stats = await store.stats(teamId);
+    const stats = await store.stats();
     res.json(stats);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -154,8 +153,7 @@ router.post('/api/memories/cleanup', async (req, res) => {
 
 router.post('/api/memories/decay', async (req, res) => {
   try {
-    const { teamId } = req.body;
-    const modified = await store.applyDecay(teamId || 'default');
+    const modified = await store.applyDecay();
     res.json({ modified });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -208,7 +206,9 @@ function formatList(memories) {
     accessCount: m.accessCount,
     supersededBy: m.supersededBy,
     fileKey: m.fileKey,
+    fileName: m.fileName,
     pageId: m.pageId,
-    teamId: m.teamId,
+    pageName: m.pageName,
+    componentKey: m.componentKey,
   }));
 }

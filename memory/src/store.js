@@ -19,12 +19,13 @@ export class Store {
     this.memories = this.db.collection('memories');
 
     // Indexes
-    await this.memories.createIndex({ teamId: 1, scope: 1, confidence: -1 }, { background: true });
+    await this.memories.createIndex({ scope: 1, confidence: -1 }, { background: true });
     await this.memories.createIndex({ fileKey: 1, scope: 1, confidence: -1 }, { background: true });
     await this.memories.createIndex({ userId: 1, scope: 1 }, { background: true });
     await this.memories.createIndex({ tags: 1 }, { background: true });
     await this.memories.createIndex({ createdAt: 1 }, { background: true });
     await this.memories.createIndex({ supersededBy: 1 }, { background: true, sparse: true });
+    await this.memories.createIndex({ componentKey: 1 }, { background: true, sparse: true });
 
     // Text index for content search
     try {
@@ -61,13 +62,10 @@ export class Store {
 
     const confidenceMap = { corrected: 1.0, inferred: 0.6, explicit: 0.9 };
 
+    const resolvedScope = scope || 'file';
     const entry = {
       _id: generateId(),
-      scope: scope || 'file',
-      teamId: context.teamId,
-      userId: scope === 'user' ? context.userId : undefined,
-      fileKey: (scope === 'file' || scope === 'page') ? context.fileKey : undefined,
-      pageId: scope === 'page' ? context.pageId : undefined,
+      scope: resolvedScope,
       category: category || 'convention',
       content,
       tags: tags || [],
@@ -78,8 +76,16 @@ export class Store {
       lastAccessedAt: now,
       confidence: confidenceMap[source || 'explicit'] || 0.9,
       accessCount: 0,
-      relatedTo: existing ? [existing._id] : undefined,
     };
+
+    // Scope keys — only include when relevant
+    if (resolvedScope === 'user' && context.userId) entry.userId = context.userId;
+    if ((resolvedScope === 'file' || resolvedScope === 'page') && context.fileKey) {
+      entry.fileKey = context.fileKey;
+      if (context.fileName) entry.fileName = context.fileName;
+    }
+    if (context.componentKey) entry.componentKey = context.componentKey;
+    if (existing) entry.relatedTo = [existing._id];
 
     await this.memories.insertOne(entry);
 
@@ -98,7 +104,7 @@ export class Store {
   async recall(input) {
     const { query, scope, category, context, limit, includeSuperseded } = input;
 
-    const filter = { teamId: context.teamId, confidence: { $gt: 0.1 } };
+    const filter = { confidence: { $gt: 0.1 } };
 
     if (scope) {
       filter.scope = scope;
@@ -145,14 +151,16 @@ export class Store {
   async list(input) {
     const { scope, category, context, limit, includeSuperseded } = input;
 
-    const filter = { teamId: context.teamId };
+    const filter = {};
 
     if (scope) {
       filter.scope = scope;
-      applyScopeKey(filter, scope, context);
-    } else {
+      if (context) applyScopeKey(filter, scope, context);
+    } else if (context && (context.userId || context.fileKey)) {
+      // Only apply scope filter when context has keys to filter by
       filter.$or = buildScopeFilter(context);
     }
+    // If no context keys, return all scopes (dashboard/admin use case)
 
     if (category) filter.category = category;
     if (!includeSuperseded) filter.supersededBy = { $exists: false };
@@ -170,7 +178,6 @@ export class Store {
     const limit = maxEntries || 30;
 
     const filter = {
-      teamId: context.teamId,
       supersededBy: { $exists: false },
       confidence: { $gt: 0.3 },
       $or: buildScopeFilter(context),
@@ -231,12 +238,12 @@ export class Store {
     const { id, query, scope, context } = input;
 
     if (id) {
-      const result = await this.memories.deleteOne({ _id: id, teamId: context.teamId });
+      const result = await this.memories.deleteOne({ _id: id });
       return result.deletedCount;
     }
 
     if (query) {
-      const filter = { teamId: context.teamId, $text: { $search: query } };
+      const filter = { $text: { $search: query } };
       if (scope) {
         filter.scope = scope;
         applyScopeKey(filter, scope, context);
@@ -251,13 +258,13 @@ export class Store {
   // ─── Cleanup ────────────────────────────────────────────────────────────────
 
   async cleanup(options) {
-    const { teamId, dryRun, maxAgeDays, minConfidence, removeSuperseded } = options;
+    const { dryRun, maxAgeDays, minConfidence, removeSuperseded } = options;
     const cutoff = new Date(Date.now() - (maxAgeDays || 30) * 86400000);
     const minConf = minConfidence ?? 0.2;
 
-    const staleFilter = { teamId, createdAt: { $lt: cutoff }, accessCount: 0 };
-    const lowConfFilter = { teamId, confidence: { $lt: minConf }, supersededBy: { $exists: false } };
-    const supersededFilter = { teamId, supersededBy: { $exists: true } };
+    const staleFilter = { createdAt: { $lt: cutoff }, accessCount: 0 };
+    const lowConfFilter = { confidence: { $lt: minConf }, supersededBy: { $exists: false } };
+    const supersededFilter = { supersededBy: { $exists: true } };
 
     const staleCount = await this.memories.countDocuments(staleFilter);
     const lowConfidenceCount = await this.memories.countDocuments(lowConfFilter);
@@ -280,9 +287,9 @@ export class Store {
 
   // ─── Decay ──────────────────────────────────────────────────────────────────
 
-  async applyDecay(teamId) {
+  async applyDecay() {
     const result = await this.memories.updateMany(
-      { teamId, confidence: { $gt: 0.1 }, supersededBy: { $exists: false } },
+      { confidence: { $gt: 0.1 }, supersededBy: { $exists: false } },
       [{
         $set: {
           confidence: {
@@ -301,9 +308,9 @@ export class Store {
 
   // ─── Stats ──────────────────────────────────────────────────────────────────
 
-  async stats(teamId) {
+  async stats() {
     const pipeline = [
-      { $match: { teamId, supersededBy: { $exists: false } } },
+      { $match: { supersededBy: { $exists: false } } },
       {
         $group: {
           _id: { scope: '$scope', category: '$category' },
@@ -337,7 +344,6 @@ export class Store {
   async findSimilar(content, scope, context) {
     try {
       const filter = {
-        teamId: context.teamId,
         scope,
         supersededBy: { $exists: false },
         $text: { $search: content },

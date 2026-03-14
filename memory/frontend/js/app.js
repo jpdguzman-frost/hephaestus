@@ -42,7 +42,7 @@ const api = {
   },
 
   health: () => api.get('/api/health'),
-  stats: (teamId) => api.get('/api/stats?teamId=' + encodeURIComponent(teamId || 'default')),
+  stats: () => api.get('/api/stats'),
   list: (opts) => api.post('/api/memories/list', opts),
   recall: (opts) => api.post('/api/memories/recall', opts),
   getMemory: (id) => api.get('/api/memories/' + id),
@@ -55,7 +55,7 @@ const api = {
 
 let currentView = 'overview';
 let currentMemoryId = null;
-const teamId = 'default'; // TODO: make configurable
+// No teamId needed — single-tenant
 
 // ─── Navigation ─────────────────────────────────────────────────────────────
 
@@ -81,7 +81,7 @@ function switchView(view) {
 
 async function loadOverview() {
   try {
-    const stats = await api.stats(teamId);
+    const stats = await api.stats();
     const grid = document.getElementById('stats-grid');
 
     grid.innerHTML = `
@@ -103,7 +103,7 @@ async function loadOverview() {
 
     // Load recent memories
     const result = await api.list({
-      context: { teamId },
+      context: {},
       limit: 10,
     });
     renderMemoryList('recent-list', result.memories);
@@ -127,7 +127,7 @@ filterSuperseded.addEventListener('change', loadBrowse);
 async function loadBrowse() {
   try {
     const opts = {
-      context: { teamId },
+      context: {},
       limit: 50,
       includeSuperseded: filterSuperseded.checked,
     };
@@ -237,8 +237,9 @@ async function openModal(id) {
           Updated: ${new Date(memory.updatedAt).toLocaleString()}<br>
           Last accessed: ${new Date(memory.lastAccessedAt).toLocaleString()}<br>
           Access count: ${memory.accessCount || 0}<br>
-          ${memory.fileKey ? 'File: ' + memory.fileKey + '<br>' : ''}
-          ${memory.pageId ? 'Page: ' + memory.pageId + '<br>' : ''}
+          ${memory.fileKey ? 'File: ' + (memory.fileName || memory.fileKey) + '<br>' : ''}
+          ${memory.pageId ? 'Page: ' + (memory.pageName || memory.pageId) + '<br>' : ''}
+          ${memory.componentKey ? 'Component: ' + memory.componentKey + '<br>' : ''}
           ${memory.supersededBy ? 'Superseded by: ' + memory.supersededBy + '<br>' : ''}
         </div>
       </div>
@@ -265,7 +266,6 @@ async function runCleanup(dryRun) {
 
   try {
     const result = await api.cleanup({
-      teamId,
       dryRun,
       maxAgeDays: parseInt(document.getElementById('cleanup-age').value, 10),
       minConfidence: parseFloat(document.getElementById('cleanup-conf').value),

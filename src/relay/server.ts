@@ -36,7 +36,7 @@ interface PollingState {
 
 // ─── Relay Server ───────────────────────────────────────────────────────────
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 export class RelayServer {
   private readonly config: Config;
@@ -50,6 +50,12 @@ export class RelayServer {
   private wsClient: WebSocket | null = null;
   private startTime: number = 0;
   private pollingState: PollingState = { lastCommandTime: 0 };
+  private _boundPort: number = 0;
+
+  /** The port the relay actually bound to (may differ from config if port was in use). */
+  get boundPort(): number {
+    return this._boundPort;
+  }
 
   // Chat message queue (plugin → MCP server)
   private chatInbox: Array<{ id: string; message: string; selection: unknown[]; timestamp: number }> = [];
@@ -70,10 +76,6 @@ export class RelayServer {
     return this._memoryStore;
   }
 
-  /** Team ID for memory operations. */
-  get memoryTeamId(): string {
-    return this.memoryConfig.teamId;
-  }
 
   constructor(config: Config, logger: Logger) {
     this.config = config;
@@ -127,7 +129,7 @@ export class RelayServer {
   async start(): Promise<void> {
     this.startTime = Date.now();
 
-    const { host, port } = this.config.relay;
+    const { host } = this.config.relay;
 
     // Create Fastify instance with a custom HTTP server so we can intercept
     // upgrade requests for WebSocket before Fastify processes them.
@@ -140,7 +142,7 @@ export class RelayServer {
     this.fastify.addHook("onRequest", async (request, reply) => {
       reply.header("Access-Control-Allow-Origin", "*");
       reply.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      reply.header("Access-Control-Allow-Headers", "Content-Type, X-Plugin-Id, X-Plugin-File, X-Session-Id, X-Auth-Token");
+      reply.header("Access-Control-Allow-Headers", "Content-Type, X-Plugin-Id, X-Plugin-File, X-Plugin-Page, X-Session-Id, X-Auth-Token");
 
       if (request.method === "OPTIONS") {
         reply.status(204).send();
@@ -149,8 +151,8 @@ export class RelayServer {
 
     this.registerRoutes(this.fastify);
 
-    // Start Fastify
-    await this.fastify.listen({ host, port });
+    // Bind to the first available port in the range
+    const port = await this.bindToAvailablePort(host);
 
     // Set up WebSocket server on the same HTTP server
     if (this.config.websocket.enabled) {
@@ -166,7 +168,7 @@ export class RelayServer {
 
     // Initialize memory (optional, non-blocking)
     // Service mode (HTTP client) takes precedence over direct MongoDB
-    if (this.memoryConfig.serviceUrl) {
+    if (this.memoryConfig.enabled && this.memoryConfig.serviceUrl) {
       this._memoryStore = new MemoryServiceClient(
         this.memoryConfig.serviceUrl,
         this.logger,
@@ -186,6 +188,48 @@ export class RelayServer {
     }
 
     this.logger.info("Relay server started", { host, port });
+  }
+
+  /**
+   * Try each port in the configured range until one binds successfully.
+   * If port is 0 (test mode), let the OS assign a random port.
+   * Returns the port that was bound.
+   */
+  private async bindToAvailablePort(host: string): Promise<number> {
+    const { port: preferredPort, portRangeStart, portRangeEnd } = this.config.relay;
+
+    // Port 0 = OS-assigned random port (used in tests)
+    if (preferredPort === 0) {
+      await this.fastify!.listen({ host, port: 0 });
+      const addr = this.fastify!.server.address();
+      this._boundPort = typeof addr === "object" && addr ? addr.port : 0;
+      return this._boundPort;
+    }
+
+    const start = portRangeStart ?? preferredPort;
+    const end = portRangeEnd ?? preferredPort;
+
+    for (let port = start; port <= end; port++) {
+      try {
+        await this.fastify!.listen({ host, port });
+        this._boundPort = port;
+        return port;
+      } catch (err: unknown) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "EADDRINUSE") {
+          this.logger.debug("Port in use, trying next", { port });
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw new RexError({
+      category: ErrorCategory.INTERNAL_ERROR,
+      message: `All Rex relay ports (${start}–${end}) are in use`,
+      retryable: false,
+      suggestion: "Close an existing Rex session to free a port.",
+    });
   }
 
   /**
@@ -620,6 +664,12 @@ export class RelayServer {
         return err.toResponse() as unknown as Record<string, unknown>;
       }
       throw err;
+    }
+
+    // Update pageId from poll header (user may switch pages mid-session)
+    const pageIdHeader = req.headers["x-plugin-page"] as string | undefined;
+    if (pageIdHeader && this.connection.session) {
+      this.connection.session.pageId = pageIdHeader;
     }
 
     // Record the poll

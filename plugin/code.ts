@@ -6,24 +6,64 @@
 // fetch, or WebSocket. All networking goes through the UI iframe via
 // figma.ui.postMessage / figma.ui.onmessage.
 
-import { Poller, setupHttpBridge } from "./poller";
+import { Poller, setupHttpBridge, httpRequestRaw } from "./poller";
 import { WSClient } from "./ws-client";
 import { Executor } from "./executor";
 import { preloadFonts } from "./fonts";
 
-var RELAY_URL = "http://localhost:7780";
+var PORT_RANGE_START = 7780;
+var PORT_RANGE_END = 7789;
 
 type TransportStatus = "websocket" | "http" | "disconnected";
 
 // Module-scope poller reference so chat handler can access it
 var pollerRef: Poller | null = null;
 
-function reportStatus(transport: TransportStatus): void {
+function reportStatus(transport: TransportStatus, port?: number): void {
   figma.ui.postMessage({
     type: "status",
     connected: transport !== "disconnected",
     transport: transport,
+    port: port,
   });
+}
+
+/**
+ * Scan ports 7780–7789 for a relay in WAITING state (no plugin connected).
+ * Returns the base URL of the first free relay, or null if none found.
+ */
+async function discoverRelay(): Promise<string | null> {
+  var results: Array<{ url: string; free: boolean } | null> = [];
+
+  // Parallel health check on all ports
+  var checks: Promise<{ url: string; free: boolean } | null>[] = [];
+  for (var p = PORT_RANGE_START; p <= PORT_RANGE_END; p++) {
+    checks.push(checkPort(p));
+  }
+  results = await Promise.all(checks);
+
+  // Return first free relay (lowest port wins)
+  for (var i = 0; i < results.length; i++) {
+    if (results[i] && results[i]!.free) {
+      return results[i]!.url;
+    }
+  }
+  return null;
+}
+
+async function checkPort(port: number): Promise<{ url: string; free: boolean } | null> {
+  var url = "http://localhost:" + port;
+  try {
+    var resp = await httpRequestRaw("GET", url + "/health", undefined, undefined, 2000);
+    if (resp.status === 200 && resp.body) {
+      var health = JSON.parse(resp.body);
+      var state = health && health.connection && health.connection.state;
+      return { url: url, free: state === "WAITING" };
+    }
+  } catch (e) {
+    // Port not responding — skip
+  }
+  return null;
 }
 
 async function main(): Promise<void> {
@@ -33,13 +73,53 @@ async function main(): Promise<void> {
   // Initialize executor
   var executor = new Executor();
 
-  // Create WS client (needs to handle UI messages)
-  var ws = new WSClient(RELAY_URL, executor);
-
-  // Set up the message bridge: UI iframe handles HTTP/WS, relays responses back
+  // Set up the message bridge FIRST — needed for httpRequestRaw in discovery
   setupHttpBridge();
 
-  // Add WS, chat, and resize message handling to the existing onmessage handler
+  // Forward selection changes to UI
+  figma.on("selectionchange", function() {
+    var sel = figma.currentPage.selection;
+    var items: Array<{ id: string; name: string; type: string }> = [];
+    for (var i = 0; i < sel.length; i++) {
+      items.push({ id: sel[i].id, name: sel[i].name, type: sel[i].type });
+    }
+    figma.ui.postMessage({
+      type: "selection-changed",
+      count: items.length,
+      items: items.slice(0, 3)
+    });
+  });
+
+  // Pre-load common fonts (non-blocking for startup)
+  preloadFonts().catch(function(e) { console.warn("Font preload failed:", e); });
+
+  // Discover a free relay in the port range
+  var relayUrl = await discoverRelay();
+
+  if (relayUrl) {
+    await connectToRelayImpl(relayUrl, executor);
+  } else {
+    reportStatus("disconnected");
+
+    // Retry discovery periodically
+    var retryInterval = setInterval(async function() {
+      var found = await discoverRelay();
+      if (found) {
+        clearInterval(retryInterval);
+        await connectToRelayImpl(found, executor);
+      }
+    }, 3000);
+
+    figma.on("close", function() {
+      clearInterval(retryInterval);
+    });
+  }
+}
+
+async function connectToRelayImpl(relayUrl: string, executor: Executor): Promise<void> {
+  var ws = new WSClient(relayUrl, executor);
+
+  // Add WS, chat, and resize message handling
   var existingHandler = figma.ui.onmessage;
   figma.ui.onmessage = function(msg: unknown) {
     var message = msg as Record<string, unknown>;
@@ -71,55 +151,34 @@ async function main(): Promise<void> {
       }
       return;
     }
-    // Forward to existing handler (which handles http-response)
     if (existingHandler) {
       (existingHandler as (msg: unknown) => void)(msg);
     }
   };
 
-  // Forward selection changes to UI
-  figma.on("selectionchange", function() {
-    var sel = figma.currentPage.selection;
-    var items: Array<{ id: string; name: string; type: string }> = [];
-    for (var i = 0; i < sel.length; i++) {
-      items.push({ id: sel[i].id, name: sel[i].name, type: sel[i].type });
-    }
-    figma.ui.postMessage({
-      type: "selection-changed",
-      count: items.length,
-      items: items.slice(0, 3)
-    });
-  });
+  // Extract port number for UI display
+  var portMatch = relayUrl.match(/:(\d+)$/);
+  var port = portMatch ? parseInt(portMatch[1], 10) : 7780;
 
-  // Pre-load common fonts (non-blocking for startup)
-  preloadFonts().catch(function(e) { console.warn("Font preload failed:", e); });
-
-  // Start HTTP polling (always-on baseline)
-  var poller = new Poller(RELAY_URL, executor);
+  var poller = new Poller(relayUrl, executor);
   pollerRef = poller;
   var connected = await poller.connect();
 
   if (connected) {
     await poller.startPolling();
-    reportStatus("http");
+    reportStatus("http", port);
 
-    // Attempt WebSocket upgrade (optional fast path)
     var sessionId = poller.getSessionId();
-    if (sessionId) {
-      ws.setSessionId(sessionId);
-    }
+    if (sessionId) ws.setSessionId(sessionId);
     var token = poller.getAuthToken();
-    if (token) {
-      ws.setAuthToken(token);
-    }
+    if (token) ws.setAuthToken(token);
 
     ws.onStatusChange(function(wsConnected) {
-      reportStatus(wsConnected ? "websocket" : "http");
+      reportStatus(wsConnected ? "websocket" : "http", port);
     });
 
     ws.connect();
 
-    // Auto-reconnect: when poller reconnects, re-upgrade WebSocket
     poller.setReconnectCallback(function() {
       var newSid = poller.getSessionId();
       if (newSid) ws.setSessionId(newSid);
@@ -127,7 +186,7 @@ async function main(): Promise<void> {
       if (newTok) ws.setAuthToken(newTok);
       ws.disconnect();
       ws.connect();
-      reportStatus("http");
+      reportStatus("http", port);
     });
 
     figma.on("close", function() {
@@ -137,28 +196,33 @@ async function main(): Promise<void> {
   } else {
     reportStatus("disconnected");
 
-    // Retry connection periodically
     var retryInterval = setInterval(async function() {
       var retryConnected = await poller.connect();
       if (retryConnected) {
         clearInterval(retryInterval);
         await poller.startPolling();
-        reportStatus("http");
+        reportStatus("http", port);
 
         var sid = poller.getSessionId();
-        if (sid) {
-          ws.setSessionId(sid);
-        }
+        if (sid) ws.setSessionId(sid);
         var tok = poller.getAuthToken();
-        if (tok) {
-          ws.setAuthToken(tok);
-        }
+        if (tok) ws.setAuthToken(tok);
 
         ws.onStatusChange(function(wsConnected) {
-          reportStatus(wsConnected ? "websocket" : "http");
+          reportStatus(wsConnected ? "websocket" : "http", port);
         });
 
         ws.connect();
+
+        poller.setReconnectCallback(function() {
+          var newSid = poller.getSessionId();
+          if (newSid) ws.setSessionId(newSid);
+          var newTok = poller.getAuthToken();
+          if (newTok) ws.setAuthToken(newTok);
+          ws.disconnect();
+          ws.connect();
+          reportStatus("http", port);
+        });
 
         figma.on("close", function() {
           poller.disconnect();

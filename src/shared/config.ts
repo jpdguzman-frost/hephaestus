@@ -9,6 +9,8 @@ const PaddingArraySchema = z.array(z.number().int().positive()).min(1).max(6);
 const RelayConfigSchema = z.object({
   port: z.number().int().min(1024).max(65535).default(7780),
   host: z.string().default("127.0.0.1"),
+  portRangeStart: z.number().int().min(1024).max(65535).default(7780),
+  portRangeEnd: z.number().int().min(1024).max(65535).default(7789),
 });
 
 const PollingConfigSchema = z.object({

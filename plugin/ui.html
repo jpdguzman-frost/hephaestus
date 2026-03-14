@@ -24,7 +24,8 @@
   #illustration-area {
     position: relative;
     width: 360px;
-    height: 155px;
+    flex: 1 0 0;
+    min-height: 0;
     background: #F1C674;
     display: flex;
     align-items: center;
@@ -53,8 +54,8 @@
 
   #status-badge {
     position: absolute;
-    top: 11px;
-    right: 10px;
+    top: 12px;
+    right: 12px;
     font-weight: 700;
     font-size: 8px;
     text-transform: uppercase;
@@ -64,6 +65,9 @@
     background: #EF4444;
     color: #FFFFFF;
     line-height: 1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
   }
 
   #queue-badge {
@@ -102,7 +106,7 @@
     flex-direction: column;
     justify-content: center;
     overflow: hidden;
-    padding: 12px 14px 16px 14px;
+    padding: 21px 14px;
     box-shadow: 0px -2px 8px rgba(0,0,0,0.04);
   }
 
@@ -152,7 +156,7 @@
 
   #status-talk-now {
     font-weight: 700;
-    font-size: 12px;
+    font-size: 16px;
     color: #F4C97A;
     cursor: pointer;
     line-height: 1;
@@ -725,10 +729,368 @@
   .msg-content table.md-table th:last-child {
     padding-right: 12px;
   }
+
+  /* ─── Channel Input Screen ─── */
+  #channel-screen {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #302A24;
+    padding: 32px;
+    overflow: hidden;
+    min-height: 100vh;
+  }
+
+  #channel-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  #channel-header-text {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: #F06800;
+    white-space: nowrap;
+    line-height: normal;
+  }
+
+  /* Digit area: positioned container for boxes + overlay input */
+  #digit-area {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .digit-box {
+    flex: 1 0 0;
+    min-width: 0;
+    min-height: 1px;
+    height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #2E2A28;
+  }
+
+  .digit-box.no-bg {
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .digit-box.connecting-bg {
+    background: rgba(46, 42, 40, 0.7);
+  }
+
+  .digit-box .digit-char {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 80px;
+    line-height: 1;
+    color: #F4F3F2;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .digit-box .digit-char.dimmed {
+    opacity: 0.5;
+  }
+
+  .digit-box .digit-char.error {
+    color: #F04545;
+  }
+
+  .digit-box .digit-placeholder {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 36px;
+    line-height: normal;
+    color: #7A7672;
+    opacity: 0.3;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .digit-box .digit-cursor {
+    width: 2px;
+    height: 58px;
+    background: #F1C674;
+    border-radius: 1px;
+    animation: cursor-blink 1s ease-in-out infinite;
+  }
+
+  @keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Transparent input overlaid on digit area for real keyboard input */
+  #channel-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: transparent;
+    caret-color: transparent;
+    font-size: 80px;
+    text-align: center;
+    letter-spacing: 0.1em;
+    -moz-appearance: textfield;
+    z-index: 2;
+  }
+
+  #channel-input::-webkit-outer-spin-button,
+  #channel-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* ─── Bottom Section ─── */
+  #channel-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  #channel-error-text {
+    display: none;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 500;
+    font-size: 11px;
+    color: #C1B9B3;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  #channel-connect-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    width: 100%;
+    height: 48px;
+    border: none;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  #channel-connect-btn.disabled {
+    background: #4A4440;
+    color: #7A7672;
+    cursor: default;
+  }
+
+  #channel-connect-btn.ready {
+    background: #F06800;
+    color: #FFFFFF;
+  }
+
+  #channel-connect-btn.ready:hover {
+    background: #D85E00;
+  }
+
+  #channel-connect-btn.connecting {
+    background: #F1C674;
+    color: #302A24;
+    cursor: default;
+  }
+
+  #channel-connect-btn.error {
+    background: #F06800;
+    color: #FFFFFF;
+  }
+
+  #channel-connect-btn.error:hover {
+    background: #D85E00;
+  }
+
+  /* ─── Disconnected Overlay ─── */
+  #channel-disconnected {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(48, 42, 36, 0.97);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 64px 32px 32px 32px;
+    overflow: hidden;
+    z-index: 500;
+  }
+
+  #disconnected-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    width: 320px;
+  }
+
+  #disconnected-logo-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 64px;
+  }
+
+  #disconnected-logo-block svg {
+    width: 61px;
+    height: 24px;
+  }
+
+  #disconnected-icon {
+    width: 120px;
+    height: 120px;
+    background: #2E2A28;
+    border-radius: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #disconnected-icon span {
+    font-size: 52.5px;
+    line-height: normal;
+    text-align: center;
+  }
+
+  #disconnected-message {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 500;
+    font-size: 16px;
+    color: #DBD6D2;
+    text-align: center;
+    line-height: 1.5;
+    width: 280px;
+  }
+
+  #disconnected-message strong {
+    font-weight: 700;
+  }
+
+  #disconnected-subtitle {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 400;
+    font-size: 12px;
+    color: #8C827A;
+    text-align: center;
+    line-height: 1.5;
+    width: 280px;
+  }
+
+  #disconnected-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+
+  #reconnect-btn {
+    flex: 1 0 0;
+    min-width: 0;
+    height: 48px;
+    background: #F1C674;
+    color: #302A24;
+    border: none;
+    border-radius: 8px;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.14px;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #reconnect-btn:hover {
+    background: #E5B85E;
+  }
+
+  #change-channel-btn {
+    flex: 1 0 0;
+    min-width: 0;
+    height: 48px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: #B6AFAB;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.14px;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #change-channel-btn:hover {
+    color: #DBD6D2;
+  }
 </style>
 
 <div id="container" style="position: relative;">
-  <div id="status-container">
+
+  <!-- ─── Channel Input Screen ─── -->
+  <div id="channel-screen">
+    <div id="channel-header">
+      <span id="channel-header-text">REX</span>
+    </div>
+    <div id="digit-area">
+      <div class="digit-box" id="db0"><span class="digit-placeholder">&ndash;</span></div>
+      <div class="digit-box" id="db1"><span class="digit-placeholder">&ndash;</span></div>
+      <div class="digit-box" id="db2"><span class="digit-placeholder">&ndash;</span></div>
+      <div class="digit-box" id="db3"><span class="digit-placeholder">&ndash;</span></div>
+      <input id="channel-input" type="text" inputmode="numeric" maxlength="4" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="channel-bottom">
+      <button id="channel-connect-btn" class="disabled">Connect</button>
+      <p id="channel-error-text"></p>
+    </div>
+  </div>
+
+  <!-- ─── Disconnected Overlay ─── -->
+  <div id="channel-disconnected">
+    <div id="disconnected-content">
+      <div id="disconnected-logo-block">
+        <svg width="61" height="24" viewBox="0 0 61 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 24V0H9.34246C11.0252 0 12.5112 0.289933 13.8006 0.869799C15.1118 1.44966 16.139 2.30873 16.882 3.44698C17.625 4.58524 17.9965 5.99195 17.9965 7.66711C17.9965 9.29933 17.6141 10.6953 16.8492 11.855C16.0843 12.9933 15.0572 13.8524 13.7678 14.4322L19.3405 24H13.6367L7.60509 13.4013L10.8831 15.302H5.08099V24H0ZM5.08099 10.953H9.37524C10.0964 10.953 10.7192 10.8134 11.2437 10.5342C11.7682 10.255 12.1725 9.86846 12.4566 9.3745C12.7626 8.88054 12.9155 8.31141 12.9155 7.66711C12.9155 7.00134 12.7626 6.42148 12.4566 5.92752C12.1725 5.43356 11.7682 5.04698 11.2437 4.76779C10.7192 4.48859 10.0964 4.34899 9.37524 4.34899H5.08099V10.953Z" fill="#F4F3F2"/><path d="M21.8644 24V0H38.2874V4.34899H26.9454V9.79329H37.6318V14.1423H26.9454V19.651H38.2874V24H21.8644Z" fill="#F4F3F2"/><path d="M39.3648 24L47.3633 11.9839L39.3648 0H45.1998L51.6248 9.6H48.7729L55.1651 0H61V0L53.0343 11.9839L61 24H55.1651L48.7729 14.3678L51.6248 14.4L45.1998 24H39.3648Z" fill="#F4F3F2"/></svg>
+        <div id="disconnected-icon"><span>⚡</span></div>
+      </div>
+      <div id="disconnected-message">We've lost our connection<br>to channel <strong id="disconnected-channel-num">7780</strong>.</div>
+      <div id="disconnected-subtitle">Don't worry — Rex remembers where you left off.</div>
+    </div>
+    <div id="disconnected-buttons">
+      <button id="reconnect-btn">Reconnect</button>
+      <button id="change-channel-btn">Change channel</button>
+    </div>
+  </div>
+
+  <div id="status-container" style="display:none;">
     <div id="illustration-area" class="disconnected">
       <span id="rex-label"><svg width="61" height="24" viewBox="0 0 61 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 24V0H9.34246C11.0252 0 12.5112 0.289933 13.8006 0.869799C15.1118 1.44966 16.139 2.30873 16.882 3.44698C17.625 4.58524 17.9965 5.99195 17.9965 7.66711C17.9965 9.29933 17.6141 10.6953 16.8492 11.855C16.0843 12.9933 15.0572 13.8524 13.7678 14.4322L19.3405 24H13.6367L7.60509 13.4013L10.8831 15.302H5.08099V24H0ZM5.08099 10.953H9.37524C10.0964 10.953 10.7192 10.8134 11.2437 10.5342C11.7682 10.255 12.1725 9.86846 12.4566 9.3745C12.7626 8.88054 12.9155 8.31141 12.9155 7.66711C12.9155 7.00134 12.7626 6.42148 12.4566 5.92752C12.1725 5.43356 11.7682 5.04698 11.2437 4.76779C10.7192 4.48859 10.0964 4.34899 9.37524 4.34899H5.08099V10.953Z" fill="#F4F3F2"/><path d="M21.8644 24V0H38.2874V4.34899H26.9454V9.79329H37.6318V14.1423H26.9454V19.651H38.2874V24H21.8644Z" fill="#F4F3F2"/><path d="M39.3648 24L47.3633 11.9839L39.3648 0H45.1998L51.6248 9.6H48.7729L55.1651 0H61V0L53.0343 11.9839L61 24H55.1651L48.7729 14.3678L51.6248 14.4L45.1998 24H39.3648Z" fill="#F4F3F2"/></svg></span>
       <span id="status-badge">OFF</span>
@@ -749,7 +1111,7 @@
   <div id="crash-overlay">
     <div class="crash-title">Something went wrong</div>
     <div class="crash-body">Rex encountered an unexpected error. Try reloading the plugin.</div>
-    <button class="crash-reload" onclick="parent.postMessage({ pluginMessage: { type: 'resize', width: 360, height: 215 } }, '*'); location.reload();">Reload Plugin</button>
+    <button class="crash-reload" onclick="parent.postMessage({ pluginMessage: { type: 'resize', width: 360, height: 286 } }, '*'); location.reload();">Reload Plugin</button>
   </div>
 
   <div id="chat-container">
@@ -1110,16 +1472,16 @@
     if (currentTransport === "websocket") {
       landingImg.classList.remove("idle");
       landingImg.classList.add("connected");
-      statusBadge.textContent = currentPort && currentPort !== 7780 ? "WS:" + currentPort : "WS";
+      statusBadge.innerHTML = "<span>WS</span><span>" + (currentPort || "7780") + "</span>";
       statusBadge.style.background = colors.connected;
     } else if (currentTransport === "http") {
       landingImg.classList.remove("idle", "connected");
-      statusBadge.textContent = currentPort && currentPort !== 7780 ? "HTTP:" + currentPort : "HTTP";
+      statusBadge.innerHTML = "<span>HTTP</span><span>" + (currentPort || "7780") + "</span>";
       statusBadge.style.background = colors.forging;
     } else {
       landingImg.classList.add("idle");
       landingImg.classList.remove("connected");
-      statusBadge.textContent = "OFF";
+      statusBadge.innerHTML = "<span>OFF</span>";
       statusBadge.style.background = colors.disconnected;
     }
     updateStatusInputBar();
@@ -1139,7 +1501,7 @@
       statusIdleInterval = setInterval(cycleStatusPhrase, 3000);
       // Resize to compact status mode if not in chat
       if (!isChatMode) {
-        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 195 } }, "*");
+        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
       }
     } else {
       // Disconnected — show prompt, hide phrase row, apply grayscale
@@ -1153,7 +1515,7 @@
       }
       // Resize to taller status mode if not in chat
       if (!isChatMode) {
-        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 215 } }, "*");
+        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
       }
     }
   }
@@ -1223,6 +1585,18 @@
         break;
       case "selection-changed":
         handleSelectionChanged(msg);
+        break;
+      case "channel-screen":
+        showChannelScreen(msg.lastChannel);
+        break;
+      case "channel-error":
+        showChannelError(msg.message);
+        break;
+      case "channel-connected":
+        showConnectedUI(msg.channel);
+        break;
+      case "channel-disconnected":
+        showDisconnectedOverlay(msg.channel);
         break;
     }
   };
@@ -1454,8 +1828,7 @@
     isChatMode = false;
     chatContainer.classList.remove("active");
     statusContainer.classList.remove("hidden");
-    var statusHeight = currentTransport ? 195 : 215;
-    parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: statusHeight } }, "*");
+    parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
   }
 
   // Status mode field click → switch to chat (only when connected)
@@ -1752,4 +2125,203 @@
       delete streamingMessages[data.id];
     }
   }
+
+  // ─── Channel Screen Logic ──────────────────────────────────────────────
+
+  var channelScreen = document.getElementById("channel-screen");
+  var channelInput = document.getElementById("channel-input");
+  var channelConnectBtn = document.getElementById("channel-connect-btn");
+  var channelErrorText = document.getElementById("channel-error-text");
+  var digitBoxes = [
+    document.getElementById("db0"),
+    document.getElementById("db1"),
+    document.getElementById("db2"),
+    document.getElementById("db3"),
+  ];
+  var statusContainer = document.getElementById("status-container");
+  var channelDisconnected = document.getElementById("channel-disconnected");
+  var disconnectedChannelNum = document.getElementById("disconnected-channel-num");
+  var reconnectBtn = document.getElementById("reconnect-btn");
+  var changeChannelBtn = document.getElementById("change-channel-btn");
+
+  var channelState = "empty"; // empty | partial | filled | connecting | error
+
+  // ── Helpers ──
+
+  function resizeForCurrentMode() {
+    if (isChatMode) {
+      parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
+    } else {
+      parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
+    }
+  }
+
+  function resetReconnectBtn() {
+    reconnectBtn.textContent = "Reconnect";
+    reconnectBtn.style.opacity = "";
+    reconnectBtn.style.cursor = "";
+  }
+
+  function deriveState(val) {
+    if (val.length === 4) return "filled";
+    if (val.length > 0) return "partial";
+    return "empty";
+  }
+
+  // ── Rendering ──
+
+  function renderDigitBoxes() {
+    var val = channelInput.value;
+    var isFilled = (val.length === 4);
+
+    for (var i = 0; i < 4; i++) {
+      var box = digitBoxes[i];
+      box.className = "digit-box";
+
+      if (channelState === "connecting") {
+        box.classList.add("connecting-bg");
+      } else if (isFilled && channelState !== "error") {
+        box.classList.add("no-bg");
+      }
+
+      if (i < val.length) {
+        var cls = "digit-char";
+        if (channelState === "connecting") cls += " dimmed";
+        else if (channelState === "error") cls += " error";
+        box.innerHTML = '<span class="' + cls + '">' + val[i] + '</span>';
+      } else if (i === val.length && channelState !== "connecting" && channelState !== "error") {
+        box.innerHTML = '<div class="digit-cursor"></div>';
+      } else {
+        box.innerHTML = '<span class="digit-placeholder">&ndash;</span>';
+      }
+    }
+  }
+
+  function updateChannelUI() {
+    var val = channelInput.value;
+    var btn = channelConnectBtn;
+
+    renderDigitBoxes();
+
+    if (channelState === "connecting") {
+      btn.className = "connecting";
+      btn.textContent = "Connecting\u2026";
+      channelErrorText.style.display = "none";
+    } else if (channelState === "error") {
+      btn.className = "error";
+      btn.textContent = "Check Claude and Retry";
+      channelErrorText.style.display = "block";
+    } else {
+      btn.className = val.length === 4 ? "ready" : "disabled";
+      btn.textContent = "Connect";
+      channelErrorText.style.display = "none";
+    }
+  }
+
+  // ── State Transitions (called from message handlers) ──
+
+  function showChannelScreen(lastChannel) {
+    channelScreen.style.display = "flex";
+    statusContainer.style.display = "none";
+    channelDisconnected.style.display = "none";
+    resetReconnectBtn();
+
+    channelInput.value = lastChannel ? String(lastChannel) : "";
+    channelState = deriveState(channelInput.value);
+    updateChannelUI();
+    setTimeout(function() { channelInput.focus(); }, 50);
+  }
+
+  function showChannelError(message) {
+    // If disconnected overlay is showing, transition to channel screen
+    if (channelDisconnected.style.display === "flex") {
+      channelDisconnected.style.display = "none";
+      resetReconnectBtn();
+      channelScreen.style.display = "flex";
+      statusContainer.style.display = "none";
+      parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
+    }
+    channelState = "error";
+    channelErrorText.textContent = message || "Connection failed";
+    updateChannelUI();
+  }
+
+  function showConnectedUI(channel) {
+    channelScreen.style.display = "none";
+    channelDisconnected.style.display = "none";
+    statusContainer.style.display = "flex";
+    currentPort = channel;
+    resetReconnectBtn();
+    resizeForCurrentMode();
+  }
+
+  function showDisconnectedOverlay(channel) {
+    disconnectedChannelNum.textContent = channel || currentPort || "?";
+    channelDisconnected.style.display = "flex";
+    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
+  }
+
+  // ── Actions ──
+
+  function submitChannel() {
+    var val = channelInput.value.trim();
+    if (val.length !== 4) return;
+    var ch = parseInt(val, 10);
+    if (isNaN(ch)) return;
+    channelState = "connecting";
+    updateChannelUI();
+    parent.postMessage({ pluginMessage: { type: "channel-submit", channel: ch } }, "*");
+  }
+
+  // ── Input Handling ──
+
+  channelInput.addEventListener("keydown", function(e) {
+    if (channelState === "connecting") { e.preventDefault(); return; }
+
+    var val = channelInput.value;
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitChannel();
+    } else if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      if (val.length > 0) {
+        channelInput.value = val.slice(0, -1);
+        channelState = deriveState(channelInput.value);
+        updateChannelUI();
+      }
+    } else if (/^\d$/.test(e.key) && val.length < 4) {
+      e.preventDefault();
+      channelInput.value = val + e.key;
+      channelState = deriveState(channelInput.value);
+      updateChannelUI();
+    } else if (e.key.length === 1 || /^Arrow|Home|End$/.test(e.key)) {
+      e.preventDefault();
+    }
+  });
+
+  channelInput.addEventListener("input", function() {
+    var filtered = channelInput.value.replace(/[^\d]/g, "").slice(0, 4);
+    channelInput.value = filtered;
+    channelState = deriveState(filtered);
+    updateChannelUI();
+  });
+
+  // ── Button Handlers ──
+
+  channelConnectBtn.addEventListener("click", function() {
+    submitChannel();
+  });
+
+  reconnectBtn.addEventListener("click", function() {
+    reconnectBtn.textContent = "Reconnecting\u2026";
+    reconnectBtn.style.opacity = "0.6";
+    reconnectBtn.style.cursor = "default";
+    parent.postMessage({ pluginMessage: { type: "channel-reconnect" } }, "*");
+  });
+
+  changeChannelBtn.addEventListener("click", function() {
+    channelDisconnected.style.display = "none";
+    parent.postMessage({ pluginMessage: { type: "channel-change" } }, "*");
+  });
 </script>

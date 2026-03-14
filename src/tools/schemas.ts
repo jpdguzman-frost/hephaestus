@@ -867,40 +867,40 @@ const memoryCategoryEnum = z.enum([
   "correction",
 ]);
 
-export const rememberSchema = z.object({
-  content: z.string().describe("What to remember — a design decision, convention, or context"),
-  scope: memoryScopeEnum.optional().describe("Memory scope: user (personal), team (shared), file, or page. Default: file"),
-  category: memoryCategoryEnum.optional().describe("Memory category. Default: convention"),
+export const noteSchema = z.object({
+  content: z.string().describe("What to note — a design decision, convention, or context"),
+  scope: memoryScopeEnum.optional().describe("Note scope: user (personal), team (shared), file, or page. Default: file"),
+  category: memoryCategoryEnum.optional().describe("Note category. Default: convention"),
   tags: z.array(z.string()).optional().describe("Semantic tags for retrieval"),
   componentKey: z.string().optional().describe("Figma component key — stable reference for design system components"),
 });
 
-export const recallSchema = z.object({
-  query: z.string().describe("What to recall — topic or keyword"),
+export const notesSchema = z.object({
+  query: z.string().describe("What to look up — topic or keyword"),
   scope: memoryScopeEnum.optional().describe("Filter by scope"),
   category: memoryCategoryEnum.optional().describe("Filter by category"),
   componentKey: z.string().optional().describe("Filter by Figma component key"),
   limit: z.number().int().min(1).max(50).optional().describe("Max results (default: 10)"),
 });
 
-export const forgetSchema = z.object({
-  id: z.string().optional().describe("Specific memory ID to delete"),
-  query: z.string().optional().describe("Delete memories matching this query"),
+export const removeNoteSchema = z.object({
+  id: z.string().optional().describe("Specific note ID to delete"),
+  query: z.string().optional().describe("Delete notes matching this query"),
   scope: memoryScopeEnum.optional().describe("Scope filter for query-based deletion"),
 });
 
-export const memoriesSchema = z.object({
+export const browseNotesSchema = z.object({
   scope: memoryScopeEnum.optional().describe("Filter by scope"),
   category: memoryCategoryEnum.optional().describe("Filter by category"),
   limit: z.number().int().min(1).max(100).optional().describe("Max results (default: 20)"),
-  includeSuperseded: z.boolean().optional().describe("Include superseded memories (default: false)"),
+  includeSuperseded: z.boolean().optional().describe("Include superseded notes (default: false)"),
 });
 
-export const memoryCleanupSchema = z.object({
+export const cleanupNotesSchema = z.object({
   dryRun: z.boolean().optional().describe("Preview what would be removed (default: true)"),
-  maxAgeDays: z.number().int().min(1).optional().describe("Remove memories older than N days with 0 access (default: 30)"),
-  minConfidence: z.number().min(0).max(1).optional().describe("Remove memories below this confidence (default: 0.2)"),
-  removeSuperseded: z.boolean().optional().describe("Remove superseded memories (default: true)"),
+  maxAgeDays: z.number().int().min(1).optional().describe("Remove notes older than N days with 0 access (default: 30)"),
+  minConfidence: z.number().min(0).max(1).optional().describe("Remove notes below this confidence (default: 0.2)"),
+  removeSuperseded: z.boolean().optional().describe("Remove superseded notes (default: true)"),
 });
 
 // ============================================================================
@@ -983,12 +983,12 @@ export const schemaRegistry = {
   send_chat_response: sendChatResponseSchema,
   send_chat_chunk: sendChatChunkSchema,
 
-  // Memory
-  remember: rememberSchema,
-  recall: recallSchema,
-  forget: forgetSchema,
-  memories: memoriesSchema,
-  memory_cleanup: memoryCleanupSchema,
+  // Notes
+  note: noteSchema,
+  notes: notesSchema,
+  remove_note: removeNoteSchema,
+  browse_notes: browseNotesSchema,
+  cleanup_notes: cleanupNotesSchema,
 } as const;
 
 export type ToolName = keyof typeof schemaRegistry;

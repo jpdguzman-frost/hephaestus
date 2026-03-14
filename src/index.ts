@@ -174,6 +174,14 @@ async function main(): Promise<void> {
 
   try {
     await server.start();
+    const channel = server.getRelay().boundPort;
+    process.stderr.write(`\n`);
+    process.stderr.write(`  ╔═══════════════════════════════╗\n`);
+    process.stderr.write(`  ║                               ║\n`);
+    process.stderr.write(`  ║   REX · channel ${String(channel).padEnd(13)}║\n`);
+    process.stderr.write(`  ║                               ║\n`);
+    process.stderr.write(`  ╚═══════════════════════════════╝\n`);
+    process.stderr.write(`\n`);
   } catch (err) {
     logger.error("Failed to start Rex", {
       error: err instanceof Error ? err.message : String(err),

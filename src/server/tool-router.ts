@@ -118,12 +118,12 @@ const TOOL_ROUTES: Record<string, ToolRoute> = {
   send_chat_response:  { category: "local" },
   send_chat_chunk:     { category: "local" },
 
-  // ── Memory Tools ──────────────────────────────────────────────────────────
-  remember:        { category: "local" },
-  recall:          { category: "local" },
-  forget:          { category: "local" },
-  memories:        { category: "local" },
-  memory_cleanup:  { category: "local" },
+  // ── Note Tools ───────────────────────────────────────────────────────────
+  note:            { category: "local" },
+  notes:           { category: "local" },
+  remove_note:     { category: "local" },
+  browse_notes:    { category: "local" },
+  cleanup_notes:   { category: "local" },
 };
 
 // ─── Handler Types ──────────────────────────────────────────────────────────
@@ -378,7 +378,14 @@ async function handleGetStatus(
 
   const memoryStore = context.relay.memoryStore;
 
+  const ch = context.relay.boundPort;
+  const pluginConnected = state !== "WAITING";
+
   return {
+    channel: ch,
+    _displayToUser: pluginConnected
+      ? null
+      : `\n## Rex · Channel ${ch}\n\nEnter **${ch}** in the Rex plugin to connect.\n`,
     state,
     transport: {
       http: true,
@@ -399,7 +406,7 @@ async function handleGetStatus(
     memory: {
       enabled: !!memoryStore,
       connected: memoryStore?.isConnected ?? false,
-      type: memoryStore ? ("ensureConnected" in memoryStore ? "service" : "direct") : null,
+      url: memoryStore?.url ?? null,
     },
     uptime: Math.floor(healthMetrics.connection.uptime / 1000),
   };
@@ -487,12 +494,12 @@ async function handleSendChatChunk(
  */
 async function getMemoryStore(
   context: ToolContext,
-): Promise<import("../memory/store.js").MemoryStore | import("../memory/client.js").MemoryServiceClient | null> {
+): Promise<import("../memory/client.js").MemoryServiceClient | null> {
   const store = context.relay.memoryStore;
   if (!store) return null;
 
-  if (!store.isConnected && "ensureConnected" in store) {
-    await (store as import("../memory/client.js").MemoryServiceClient).ensureConnected();
+  if (!store.isConnected) {
+    await store.ensureConnected();
   }
 
   return store.isConnected ? store : null;
@@ -521,20 +528,31 @@ function getMemoryContext(context: ToolContext): {
   };
 }
 
-async function handleRemember(
+async function handleNote(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
   const store = await getMemoryStore(context);
   if (!store) {
     return {
+      _source: "rex-cloud",
       status: "disabled",
       message:
-        "Memory system is not available. Check that the memory service is reachable.",
+        "Note system is not available. Check that the memory service is reachable.",
     };
   }
 
   const memCtx = getMemoryContext(context);
+  const scope = (params["scope"] as string | undefined) ?? "file";
+
+  // Validate: file/page-scoped notes require a fileKey
+  if ((scope === "file" || scope === "page") && !memCtx.fileKey) {
+    return {
+      _source: "rex-cloud",
+      status: "error",
+      message: `Cannot store a ${scope}-scoped note without a connected Figma file. Connect the plugin first, or use scope: "team".`,
+    };
+  }
 
   // Auto-tag with pageName as a soft reference
   const tags = (params["tags"] as string[] | undefined) ?? [];
@@ -549,7 +567,7 @@ async function handleRemember(
   }
 
   const entry = await store.remember({
-    scope: (params["scope"] as any) ?? "file",
+    scope: scope as any,
     category: (params["category"] as any) ?? "convention",
     content: params["content"] as string,
     tags,
@@ -558,6 +576,7 @@ async function handleRemember(
   });
 
   return {
+    _source: "rex-cloud",
     status: "stored",
     id: entry._id,
     scope: entry.scope,
@@ -566,13 +585,13 @@ async function handleRemember(
   };
 }
 
-async function handleRecall(
+async function handleNotes(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
   const store = await getMemoryStore(context);
   if (!store) {
-    return { status: "disabled", memories: [] };
+    return { _source: "rex-cloud", status: "disabled", notes: [] };
   }
 
   const memCtx = getMemoryContext(context);
@@ -585,29 +604,44 @@ async function handleRecall(
     context: memCtx,
   });
 
-  return {
-    memories: results.map((m) => ({
+  const response: Record<string, unknown> = {
+    _source: "rex-cloud",
+    notes: results.map((m) => ({
       id: m._id,
       scope: m.scope,
       category: m.category,
       content: m.content,
       tags: m.tags,
       confidence: m.confidence,
-      createdBy: m.createdBy.name,
+      createdBy: m.createdBy?.name,
       createdAt: m.createdAt,
       accessCount: m.accessCount,
     })),
     count: results.length,
   };
+
+  // Add diagnostic context when results are empty
+  if (results.length === 0) {
+    const serviceClient = "url" in store
+      ? (store as import("../memory/client.js").MemoryServiceClient)
+      : null;
+    response._debug = {
+      serviceUrl: serviceClient?.url ?? "direct",
+      contextUsed: memCtx,
+      hint: "Query returned 0 results. Check that the service has notes matching this context (fileKey, userId).",
+    };
+  }
+
+  return response;
 }
 
-async function handleForget(
+async function handleRemoveNote(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
   const store = await getMemoryStore(context);
   if (!store) {
-    return { status: "disabled" };
+    return { _source: "rex-cloud", status: "disabled" };
   }
 
   const memCtx = getMemoryContext(context);
@@ -618,16 +652,16 @@ async function handleForget(
     params["scope"] as any,
   );
 
-  return { status: "deleted", count: deleted };
+  return { _source: "rex-cloud", status: "deleted", count: deleted };
 }
 
-async function handleMemories(
+async function handleBrowseNotes(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
   const store = await getMemoryStore(context);
   if (!store) {
-    return { status: "disabled", memories: [] };
+    return { _source: "rex-cloud", status: "disabled", notes: [] };
   }
 
   const memCtx = getMemoryContext(context);
@@ -639,30 +673,45 @@ async function handleMemories(
     params["includeSuperseded"] as boolean | undefined,
   );
 
-  return {
-    memories: results.map((m) => ({
+  const response: Record<string, unknown> = {
+    _source: "rex-cloud",
+    notes: results.map((m) => ({
       id: m._id,
       scope: m.scope,
       category: m.category,
       content: m.content,
       tags: m.tags,
       confidence: m.confidence,
-      createdBy: m.createdBy.name,
+      createdBy: m.createdBy?.name,
       createdAt: m.createdAt,
       accessCount: m.accessCount,
       supersededBy: m.supersededBy,
     })),
     count: results.length,
   };
+
+  // Add diagnostic context when results are empty
+  if (results.length === 0) {
+    const serviceClient = "url" in store
+      ? (store as import("../memory/client.js").MemoryServiceClient)
+      : null;
+    response._debug = {
+      serviceUrl: serviceClient?.url ?? "direct",
+      contextUsed: memCtx,
+      hint: "No notes found. Check that the service has notes matching this context (fileKey, userId). Use scope: 'team' to query cross-file notes.",
+    };
+  }
+
+  return response;
 }
 
-async function handleMemoryCleanup(
+async function handleCleanupNotes(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
   const store = await getMemoryStore(context);
   if (!store) {
-    return { status: "disabled" };
+    return { _source: "rex-cloud", status: "disabled" };
   }
 
   const result = await store.cleanup({
@@ -673,6 +722,7 @@ async function handleMemoryCleanup(
   });
 
   return {
+    _source: "rex-cloud",
     status: result.dryRun ? "preview" : "cleaned",
     ...result,
   };
@@ -683,11 +733,11 @@ const LOCAL_HANDLERS: Record<string, ToolHandler> = {
   wait_for_chat: handleWaitForChat,
   send_chat_response: handleSendChatResponse,
   send_chat_chunk: handleSendChatChunk,
-  remember: handleRemember,
-  recall: handleRecall,
-  forget: handleForget,
-  memories: handleMemories,
-  memory_cleanup: handleMemoryCleanup,
+  note: handleNote,
+  notes: handleNotes,
+  remove_note: handleRemoveNote,
+  browse_notes: handleBrowseNotes,
+  cleanup_notes: handleCleanupNotes,
 };
 
 // ─── Main Router ────────────────────────────────────────────────────────────

@@ -11,69 +11,32 @@ import { WSClient } from "./ws-client";
 import { Executor } from "./executor";
 import { preloadFonts } from "./fonts";
 
-var PORT_RANGE_START = 7780;
-var PORT_RANGE_END = 7789;
-
 type TransportStatus = "websocket" | "http" | "disconnected";
 
-// Module-scope poller reference so chat handler can access it
+// Module-scope references
 var pollerRef: Poller | null = null;
+var currentChannel: number | null = null;
+var executorRef: Executor | null = null;
 
-function reportStatus(transport: TransportStatus, port?: number): void {
+function reportStatus(transport: TransportStatus, channel?: number): void {
   figma.ui.postMessage({
     type: "status",
     connected: transport !== "disconnected",
     transport: transport,
-    port: port,
+    port: channel,
   });
 }
 
-/**
- * Scan ports 7780–7789 for a relay in WAITING state (no plugin connected).
- * Returns the base URL of the first free relay, or null if none found.
- */
-async function discoverRelay(): Promise<string | null> {
-  var results: Array<{ url: string; free: boolean } | null> = [];
-
-  // Parallel health check on all ports
-  var checks: Promise<{ url: string; free: boolean } | null>[] = [];
-  for (var p = PORT_RANGE_START; p <= PORT_RANGE_END; p++) {
-    checks.push(checkPort(p));
-  }
-  results = await Promise.all(checks);
-
-  // Return first free relay (lowest port wins)
-  for (var i = 0; i < results.length; i++) {
-    if (results[i] && results[i]!.free) {
-      return results[i]!.url;
-    }
-  }
-  return null;
-}
-
-async function checkPort(port: number): Promise<{ url: string; free: boolean } | null> {
-  var url = "http://localhost:" + port;
-  try {
-    var resp = await httpRequestRaw("GET", url + "/health", undefined, undefined, 2000);
-    if (resp.status === 200 && resp.body) {
-      var health = JSON.parse(resp.body);
-      var state = health && health.connection && health.connection.state;
-      return { url: url, free: state === "WAITING" };
-    }
-  } catch (e) {
-    // Port not responding — skip
-  }
-  return null;
-}
+// ─── Main ──────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // Show minimal UI — MUST be called before any postMessage
-  figma.showUI(__html__, { visible: true, width: 360, height: 215 });
+  // Show UI — starts on channel input screen (defined in ui.html defaults)
+  figma.showUI(__html__, { visible: true, width: 360, height: 286 });
 
   // Initialize executor
-  var executor = new Executor();
+  executorRef = new Executor();
 
-  // Set up the message bridge FIRST — needed for httpRequestRaw in discovery
+  // Set up the message bridge FIRST — needed for HTTP requests
   setupHttpBridge();
 
   // Forward selection changes to UI
@@ -93,30 +56,93 @@ async function main(): Promise<void> {
   // Pre-load common fonts (non-blocking for startup)
   preloadFonts().catch(function(e) { console.warn("Font preload failed:", e); });
 
-  // Discover a free relay in the port range
-  var relayUrl = await discoverRelay();
+  // Check for last used channel
+  var lastChannel: number | null = null;
+  try {
+    lastChannel = await figma.clientStorage.getAsync("rex-channel") as number | null;
+  } catch (e) { /* ignore */ }
 
-  if (relayUrl) {
-    await connectToRelayImpl(relayUrl, executor);
-  } else {
-    reportStatus("disconnected");
+  // Show channel input screen
+  figma.ui.postMessage({
+    type: "channel-screen",
+    lastChannel: lastChannel,
+  });
+}
 
-    // Retry discovery periodically
-    var retryInterval = setInterval(async function() {
-      var found = await discoverRelay();
-      if (found) {
-        clearInterval(retryInterval);
-        await connectToRelayImpl(found, executor);
-      }
-    }, 3000);
+// ─── Channel Connection ────────────────────────────────────────────────
 
-    figma.on("close", function() {
-      clearInterval(retryInterval);
+async function handleChannelSubmit(channel: number): Promise<void> {
+  var url = "http://localhost:" + channel;
+
+  try {
+    // Health check
+    var resp = await httpRequestRaw("GET", url + "/health", undefined, undefined, 3000);
+
+    if (resp.status === 0 || !resp.body) {
+      figma.ui.postMessage({
+        type: "channel-error",
+        message: "Couldn't find a session on channel " + channel + ". Is Claude running?",
+      });
+      return;
+    }
+
+    var health = JSON.parse(resp.body);
+    var state = health && health.connection && health.connection.state;
+
+    // Allow connection if relay is waiting, or if a previous plugin session
+    // left the relay in a stale state (POLLING/DEGRADED). A new plugin
+    // session should always be able to take over.
+    // Only block if we can't reach the server at all (handled above).
+
+    // Success — save channel and connect
+    currentChannel = channel;
+    try {
+      await figma.clientStorage.setAsync("rex-channel", channel);
+    } catch (e) { /* non-critical */ }
+
+    await connectToRelay(url, channel);
+  } catch (e) {
+    figma.ui.postMessage({
+      type: "channel-error",
+      message: "Something went wrong trying to reach channel " + channel + ". Try again?",
     });
   }
 }
 
-async function connectToRelayImpl(relayUrl: string, executor: Executor): Promise<void> {
+async function handleChannelReconnect(): Promise<void> {
+  if (!currentChannel) return;
+  await handleChannelSubmit(currentChannel);
+}
+
+function handleChannelChange(): void {
+  // Clean up existing connection
+  if (pollerRef) {
+    pollerRef.disconnect();
+    pollerRef = null;
+  }
+  currentChannel = null;
+
+  // Resize back to channel input
+  figma.ui.resize(360, 286);
+
+  // Show channel input screen
+  figma.clientStorage.getAsync("rex-channel").then(function(lastChannel) {
+    figma.ui.postMessage({
+      type: "channel-screen",
+      lastChannel: lastChannel as number | null,
+    });
+  }).catch(function() {
+    figma.ui.postMessage({
+      type: "channel-screen",
+      lastChannel: null,
+    });
+  });
+}
+
+// ─── Relay Connection ──────────────────────────────────────────────────
+
+async function connectToRelay(relayUrl: string, channel: number): Promise<void> {
+  var executor = executorRef!;
   var ws = new WSClient(relayUrl, executor);
 
   // Add WS, chat, and resize message handling
@@ -151,14 +177,11 @@ async function connectToRelayImpl(relayUrl: string, executor: Executor): Promise
       }
       return;
     }
+    // Fall through to previous handler (which handles channel-submit, channel-reconnect, channel-change)
     if (existingHandler) {
       (existingHandler as (msg: unknown) => void)(msg);
     }
   };
-
-  // Extract port number for UI display
-  var portMatch = relayUrl.match(/:(\d+)$/);
-  var port = portMatch ? parseInt(portMatch[1], 10) : 7780;
 
   var poller = new Poller(relayUrl, executor);
   pollerRef = poller;
@@ -166,7 +189,8 @@ async function connectToRelayImpl(relayUrl: string, executor: Executor): Promise
 
   if (connected) {
     await poller.startPolling();
-    reportStatus("http", port);
+    figma.ui.postMessage({ type: "channel-connected", channel: channel });
+    reportStatus("http", channel);
 
     var sessionId = poller.getSessionId();
     if (sessionId) ws.setSessionId(sessionId);
@@ -174,7 +198,7 @@ async function connectToRelayImpl(relayUrl: string, executor: Executor): Promise
     if (token) ws.setAuthToken(token);
 
     ws.onStatusChange(function(wsConnected) {
-      reportStatus(wsConnected ? "websocket" : "http", port);
+      reportStatus(wsConnected ? "websocket" : "http", channel);
     });
 
     ws.connect();
@@ -186,7 +210,14 @@ async function connectToRelayImpl(relayUrl: string, executor: Executor): Promise
       if (newTok) ws.setAuthToken(newTok);
       ws.disconnect();
       ws.connect();
-      reportStatus("http", port);
+      reportStatus("http", channel);
+    });
+
+    poller.setDisconnectCallback(function() {
+      figma.ui.postMessage({
+        type: "channel-disconnected",
+        channel: channel,
+      });
     });
 
     figma.on("close", function() {
@@ -194,49 +225,16 @@ async function connectToRelayImpl(relayUrl: string, executor: Executor): Promise
       ws.disconnect();
     });
   } else {
-    reportStatus("disconnected");
-
-    var retryInterval = setInterval(async function() {
-      var retryConnected = await poller.connect();
-      if (retryConnected) {
-        clearInterval(retryInterval);
-        await poller.startPolling();
-        reportStatus("http", port);
-
-        var sid = poller.getSessionId();
-        if (sid) ws.setSessionId(sid);
-        var tok = poller.getAuthToken();
-        if (tok) ws.setAuthToken(tok);
-
-        ws.onStatusChange(function(wsConnected) {
-          reportStatus(wsConnected ? "websocket" : "http", port);
-        });
-
-        ws.connect();
-
-        poller.setReconnectCallback(function() {
-          var newSid = poller.getSessionId();
-          if (newSid) ws.setSessionId(newSid);
-          var newTok = poller.getAuthToken();
-          if (newTok) ws.setAuthToken(newTok);
-          ws.disconnect();
-          ws.connect();
-          reportStatus("http", port);
-        });
-
-        figma.on("close", function() {
-          poller.disconnect();
-          ws.disconnect();
-        });
-      }
-    }, 3000);
-
-    figma.on("close", function() {
-      clearInterval(retryInterval);
-      poller.disconnect();
+    // Connection handshake failed — show error, go back to channel screen
+    figma.ui.resize(360, 286);
+    figma.ui.postMessage({
+      type: "channel-error",
+      message: "Connected to channel " + channel + " but the handshake failed. Try again?",
     });
   }
 }
+
+// ─── Chat ──────────────────────────────────────────────────────────────
 
 function handleChatSend(msg: { type: string; id: string; message: string }): void {
   if (!pollerRef) {
@@ -255,23 +253,19 @@ function handleChatSend(msg: { type: string; id: string; message: string }): voi
     });
   }
 
-  // Use the poller's authenticated HTTP bridge (same path as /connect, /results)
   // Export a small thumbnail if there's a selection
   var thumbnailPromise: Promise<string | null>;
   if (sel.length > 0) {
-    // Export the first selected node as a small PNG thumbnail
     var targetNode = sel[0];
     var exportSettings: ExportSettings = {
       format: "PNG" as const,
       constraint: { type: "WIDTH", value: 120 }
     };
     thumbnailPromise = targetNode.exportAsync(exportSettings).then(function(bytes) {
-      // Convert Uint8Array to base64 manually (no btoa in plugin sandbox)
       var binary = "";
       for (var b = 0; b < bytes.length; b++) {
         binary += String.fromCharCode(bytes[b]);
       }
-      // Use figma.base64Encode if available, otherwise manual encoding
       var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
       var result = "";
       for (var bi = 0; bi < binary.length; bi += 3) {
@@ -304,7 +298,6 @@ function handleChatSend(msg: { type: string; id: string; message: string }): voi
       return;
     }
 
-    // Wait for thumbnail then confirm to UI with selection context
     thumbnailPromise.then(function(thumbnail) {
       figma.ui.postMessage({
         type: "chat-sent-confirmation",
@@ -317,5 +310,28 @@ function handleChatSend(msg: { type: string; id: string; message: string }): voi
     });
   });
 }
+
+// ─── Init ──────────────────────────────────────────────────────────────
+
+// Wire up channel messages before main() runs (needed since main shows UI first)
+var _origOnMessage = figma.ui.onmessage;
+figma.ui.onmessage = function(msg: unknown) {
+  var message = msg as Record<string, unknown>;
+  if (message && message.type === "channel-submit") {
+    handleChannelSubmit(message.channel as number);
+    return;
+  }
+  if (message && message.type === "channel-reconnect") {
+    handleChannelReconnect();
+    return;
+  }
+  if (message && message.type === "channel-change") {
+    handleChannelChange();
+    return;
+  }
+  if (_origOnMessage) {
+    (_origOnMessage as (msg: unknown) => void)(msg);
+  }
+};
 
 main().catch(function(e) { console.error("Rex init failed:", e); });

@@ -59,6 +59,10 @@ export class MemoryServiceClient {
     return this._connected;
   }
 
+  get url(): string {
+    return this.baseUrl;
+  }
+
   async connect(): Promise<void> {
     try {
       const resp = await fetch(this.baseUrl + "/api/health");

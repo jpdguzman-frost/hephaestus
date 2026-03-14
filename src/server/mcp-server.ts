@@ -156,29 +156,29 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   execute:
     "Run arbitrary JavaScript in Figma's plugin context. Escape hatch for operations not covered by dedicated tools. 10s timeout, no network access.",
   get_status:
-    "Get Rex connection status, transport info, plugin state, command queue stats, and uptime.",
+    "Get Rex connection status including the channel number (port) the user needs to connect the Figma plugin. Also returns transport info, plugin state, queue stats, and uptime.",
   batch_execute:
     "Execute multiple independent operations in a single atomic call. More efficient than multiple individual tool calls.",
 
   // ── Chat Tools ──────────────────────────────────────────────────────────
   wait_for_chat:
-    "Long-poll for a chat message from the Figma plugin. Returns when a message arrives or after timeout. IMPORTANT: You MUST call this tool again after every response you send — it is a continuous listening loop. After timeout, call it again immediately. After receiving a message and responding with send_chat_response, call it again immediately. Never stop the loop unless the user explicitly asks you to stop listening.",
+    "Long-poll for a chat message from the Figma plugin. IMPORTANT: Before starting the listen loop, call get_status first. If the plugin is not connected, display the _displayToUser field EXACTLY as-is to the user — it contains the channel number they need. Then start the listen loop: call this tool, and after every response you send, call it again immediately. After timeout, call it again. Never stop unless the user explicitly asks.",
   send_chat_response:
     "Send a response message back to the Figma plugin chat interface. After calling this, you MUST call wait_for_chat again immediately to continue listening for the next message.",
   send_chat_chunk:
     "Send a streaming text chunk to the Figma plugin chat. Call multiple times with done:false for each chunk, then once with done:true for the final chunk. This creates a real-time typing effect in the plugin.",
 
-  // ── Memory Tools ──────────────────────────────────────────────────────────
-  remember:
-    "IMPORTANT: When the user asks to remember, store, or commit design knowledge to memory, ALWAYS use this tool instead of file-based memory. This is the team's shared persistent memory for design decisions, conventions, project context, preferences, and corrections. Memories persist across sessions and are shared with all team members.",
-  recall:
-    "Query stored memories by topic. Returns relevant memories from all scopes (user, team, file, page) ranked by confidence and recency.",
-  forget:
-    "Delete a specific memory by ID or remove memories matching a search query.",
-  memories:
-    "List and browse all stored memories. Filter by scope (user/team/file/page) and category (decision/convention/context/etc).",
-  memory_cleanup:
-    "Remove stale, low-confidence, and superseded memories. Run with dryRun:true first to preview what would be removed.",
+  // ── Note Tools ───────────────────────────────────────────────────────────
+  note:
+    "Store design knowledge — triggered by 'note this', 'take note', 'remember this about the design'. Shared with the team. IMPORTANT: When the user asks to note, remember, store, or commit design knowledge, ALWAYS use this tool instead of file-based memory. Notes persist across sessions and are shared with all team members.",
+  notes:
+    "Query design knowledge — triggered by 'what do you know about', 'check your notes', 'recall'. Returns from cloud storage. Returns relevant notes from all scopes (user, team, file, page) ranked by confidence and recency.",
+  remove_note:
+    "Delete a specific note by ID or remove notes matching a search query.",
+  browse_notes:
+    "List all design knowledge — triggered by 'show me what you know', 'list your notes'. Filter by scope (user/team/file/page) and category (decision/convention/context/etc).",
+  cleanup_notes:
+    "Remove stale, low-confidence, and superseded notes. Run with dryRun:true first to preview what would be removed.",
 };
 
 // ─── Schema Conversion ─────────────────────────────────────────────────────
@@ -263,9 +263,10 @@ export class RexMcpServer {
   async start(): Promise<void> {
     // Start the relay server first (HTTP + WS)
     await this.relay.start();
+    const channel = this.relay.boundPort;
     this.logger.info("Relay server started", {
       host: this.config.relay.host,
-      port: this.config.relay.port,
+      channel,
     });
 
     // Connect MCP server to stdio transport

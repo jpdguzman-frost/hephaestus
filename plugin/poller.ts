@@ -133,6 +133,7 @@ export class Poller {
   private maxConsecutiveErrors = 5;
   private reconnecting = false;
   private onReconnect: (() => void) | null = null;
+  private onDisconnect: (() => void) | null = null;
 
   constructor(baseUrl: string, executor: Executor) {
     this.baseUrl = baseUrl;
@@ -233,6 +234,13 @@ export class Poller {
    */
   setReconnectCallback(cb: () => void): void {
     this.onReconnect = cb;
+  }
+
+  /**
+   * Set a callback that fires when reconnect fails (connection lost).
+   */
+  setDisconnectCallback(cb: () => void): void {
+    this.onDisconnect = cb;
   }
 
   async startPolling(): Promise<void> {
@@ -479,8 +487,10 @@ export class Poller {
         }
       } else {
         console.warn("Reconnect failed, will retry on next poll");
-        // Only report disconnected after reconnect actually fails
         figma.ui.postMessage({ type: "status", connected: false, transport: null });
+        if (this.onDisconnect) {
+          this.onDisconnect();
+        }
       }
     } catch (e) {
       console.error("Reconnect error:", e);

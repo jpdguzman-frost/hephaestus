@@ -19,6 +19,8 @@ export interface PluginSession {
   pluginId: string;
   fileKey: string;
   fileName: string;
+  pageId?: string;
+  pageName?: string;
   user?: PluginUser;
   capabilities?: PluginCapabilities;
   connectedAt: number;
@@ -39,6 +41,8 @@ export interface ConnectPayload {
   pluginId: string;
   fileKey: string;
   fileName: string;
+  pageId?: string;
+  pageName?: string;
   user?: PluginUser;
   authResponse?: string;
   capabilities?: PluginCapabilities;
@@ -138,6 +142,8 @@ export class ConnectionManager {
       pluginId: payload.pluginId,
       fileKey: payload.fileKey,
       fileName: payload.fileName,
+      pageId: payload.pageId,
+      pageName: payload.pageName,
       user: payload.user,
       capabilities: payload.capabilities,
       connectedAt: now,
@@ -261,6 +267,8 @@ export class ConnectionManager {
       pluginId: this._session.pluginId,
       fileKey: this._session.fileKey,
       fileName: this._session.fileName,
+      pageId: this._session.pageId,
+      pageName: this._session.pageName,
       user: this._session.user,
       lastHeartbeat: new Date(this._session.lastHeartbeat).toISOString(),
       uptime: Date.now() - this._session.connectedAt,

@@ -73,6 +73,9 @@ function createMessageHandler(
   };
 }
 
+/** Exposed for port discovery in code.ts — avoids duplicating the HTTP bridge. */
+export { httpRequest as httpRequestRaw };
+
 function httpRequest(method: string, url: string, body?: unknown, headers?: Record<string, string>, timeout?: number): Promise<HttpResponse> {
   return new Promise((resolve) => {
     const requestId = `req_${++requestCounter}_${Date.now()}`;
@@ -166,10 +169,13 @@ export class Poller {
       // Step 2: Connect (no auth needed — handshake returns the auth token)
       // Include user identity from figma.currentUser (requires 'currentuser' permission)
       var currentUser = figma.currentUser;
+      var currentPage = figma.currentPage;
       const connectPayload = {
         pluginId: this.pluginId,
         fileKey: figma.fileKey || "unknown",
         fileName: (figma.root && figma.root.name) ? figma.root.name : "Unknown File",
+        pageId: currentPage ? currentPage.id : undefined,
+        pageName: currentPage ? currentPage.name : undefined,
         user: currentUser ? {
           id: currentUser.id,
           name: currentUser.name,
@@ -288,6 +294,11 @@ export class Poller {
           figma.ui.postMessage({ type: "forging-stop" });
         }
 
+        // Report queue depth to UI — include commands about to be executed locally
+        var serverQueueRemainder = (data.queueDepth as number) || 0;
+        var localCommandCount = (commands && commands.length) ? commands.length : 0;
+        figma.ui.postMessage({ type: "queue-update", count: serverQueueRemainder + localCommandCount });
+
         // Forward chat listening state to UI (only on change)
         var chatListeningNow = data.chatListening === true;
         if (chatListeningNow !== this.lastChatListening) {
@@ -338,7 +349,7 @@ export class Poller {
                       commandType: batch[bi].type,
                       current: completedCount + bi + 1,
                       batchTotal: commands.length,
-                      queueDepth: (commands.length - completedCount - batch.length) + serverQueueDepth,
+                      queueDepth: (commands.length - completedCount) + serverQueueDepth,
                       parallel: true
                     });
                   }
@@ -357,7 +368,8 @@ export class Poller {
                 // Sequential execution for writes (or single reads)
                 for (var si = 0; si < group.cmds.length; si++) {
                   var cmd = group.cmds[si];
-                  var remaining = (commands.length - completedCount - 1) + serverQueueDepth;
+                  // Include current command in count (so even a single command shows "1 on queue")
+                  var remaining = (commands.length - completedCount) + serverQueueDepth;
 
                   figma.ui.postMessage({
                     type: "forging-progress",
@@ -456,7 +468,6 @@ export class Poller {
     this.reconnecting = true;
 
     console.log("Attempting reconnect...");
-    figma.ui.postMessage({ type: "status", connected: false, transport: null });
 
     try {
       var success = await this.connect();
@@ -468,9 +479,12 @@ export class Poller {
         }
       } else {
         console.warn("Reconnect failed, will retry on next poll");
+        // Only report disconnected after reconnect actually fails
+        figma.ui.postMessage({ type: "status", connected: false, transport: null });
       }
     } catch (e) {
       console.error("Reconnect error:", e);
+      figma.ui.postMessage({ type: "status", connected: false, transport: null });
     } finally {
       this.reconnecting = false;
     }
@@ -491,6 +505,7 @@ export class Poller {
     const headers: Record<string, string> = {
       "X-Plugin-Id": this.pluginId,
       "X-Plugin-File": figma.fileKey || "unknown",
+      "X-Plugin-Page": figma.currentPage ? figma.currentPage.id : "",
     };
     if (this.sessionId) {
       headers["X-Session-Id"] = this.sessionId;

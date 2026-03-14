@@ -353,8 +353,8 @@ export function serializeNode(node: SceneNode, depth: number = 1, seen: Set<stri
       nodeId: node.id,
       name: node.name,
       type: node.type,
-      visible: node.visible,
-      locked: node.locked,
+      visible: true,
+      locked: false,
       position: { x: node.x, y: node.y },
       size: { width: node.width, height: node.height },
       circular: true,
@@ -368,127 +368,155 @@ export function serializeNode(node: SceneNode, depth: number = 1, seen: Set<stri
     type: node.type,
     visible: node.visible,
     locked: node.locked,
-    position: { x: node.x, y: node.y },
-    size: { width: node.width, height: node.height },
+    position: { x: Math.round(node.x), y: Math.round(node.y) },
+    size: { width: Math.round(node.width), height: Math.round(node.height) },
   };
 
-  // Rotation
+  // ── Omit defaults to reduce payload ──────────────────────────────────────
+  // Only include non-default values. The AI should assume:
+  //   visible=true, locked=false, opacity=1, rotation=0,
+  //   blendMode="NORMAL", clipsContent=true, cornerRadius=0,
+  //   layoutSizing="FIXED", constraints=SCALE/SCALE
+
+  if (result.visible === true) delete result.visible;
+  if (result.locked === false) delete result.locked;
+
+  // Rotation — omit if 0
   if ("rotation" in node) {
-    result.rotation = (node as SceneNode & { rotation: number }).rotation;
+    const rot = (node as SceneNode & { rotation: number }).rotation;
+    if (rot !== 0) result.rotation = Math.round(rot);
   }
 
-  // Opacity
-  result.opacity = node.opacity;
+  // Opacity — omit if 1
+  if (node.opacity !== 1) result.opacity = Math.round(node.opacity * 100) / 100;
 
-  // Fills
+  // Fills — omit if empty
   if ("fills" in node) {
     const fills = (node as GeometryMixin).fills;
     if (fills !== figma.mixed) {
-      result.fills = serializePaints(fills as readonly Paint[]);
+      const serialized = serializePaints(fills as readonly Paint[]);
+      if (serialized.length > 0) result.fills = serialized;
     }
   }
 
-  // Strokes
+  // Strokes — omit if empty
   if ("strokes" in node) {
     const strokes = (node as GeometryMixin).strokes;
-    result.strokes = serializePaints(strokes);
+    const serialized = serializePaints(strokes);
+    if (serialized.length > 0) {
+      result.strokes = serialized;
+
+      // Only include stroke properties when strokes exist
+      if ("strokeWeight" in node) {
+        const sw = (node as GeometryMixin).strokeWeight;
+        if (sw !== figma.mixed) result.strokeWeight = sw;
+      }
+      if ("strokeAlign" in node) {
+        const sa = (node as GeometryMixin).strokeAlign;
+        if (sa !== "INSIDE") result.strokeAlign = sa;
+      }
+      if ("dashPattern" in node) {
+        const dp = (node as GeometryMixin).dashPattern;
+        if (dp && dp.length > 0) result.dashPattern = [...dp];
+      }
+    }
   }
 
-  // Stroke properties
-  if ("strokeWeight" in node) {
-    const sw = (node as GeometryMixin).strokeWeight;
-    if (sw !== figma.mixed) result.strokeWeight = sw;
-  }
-  if ("strokeAlign" in node) {
-    result.strokeAlign = (node as GeometryMixin).strokeAlign;
-  }
-  if ("dashPattern" in node) {
-    const dp = (node as GeometryMixin).dashPattern;
-    if (dp && dp.length > 0) result.dashPattern = [...dp];
-  }
-
-  // Blend mode
+  // Blend mode — omit if NORMAL or PASS_THROUGH
   if ("blendMode" in node) {
-    result.blendMode = (node as BlendMixin).blendMode;
+    const bm = (node as BlendMixin).blendMode;
+    if (bm !== "NORMAL" && bm !== "PASS_THROUGH") result.blendMode = bm;
   }
 
-  // Effects
+  // Effects — omit if empty
   if ("effects" in node) {
     const effects = (node as BlendMixin).effects;
-    result.effects = serializeEffects(effects);
+    if (effects.length > 0) result.effects = serializeEffects(effects);
   }
 
-  // Corner radius
+  // Corner radius — omit if 0
   if ("cornerRadius" in node) {
     const cr = (node as RectangleNode).cornerRadius;
     if (cr !== figma.mixed) {
-      result.cornerRadius = cr;
+      if (cr !== 0) result.cornerRadius = cr;
     } else {
       const rn = node as RectangleNode;
-      result.cornerRadius = {
-        topLeft: rn.topLeftRadius,
-        topRight: rn.topRightRadius,
-        bottomRight: rn.bottomRightRadius,
-        bottomLeft: rn.bottomLeftRadius,
-      };
+      const tl = rn.topLeftRadius, tr = rn.topRightRadius;
+      const br = rn.bottomRightRadius, bl = rn.bottomLeftRadius;
+      if (tl !== 0 || tr !== 0 || br !== 0 || bl !== 0) {
+        // If all same, use single value
+        if (tl === tr && tr === br && br === bl) {
+          result.cornerRadius = tl;
+        } else {
+          result.cornerRadius = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
+        }
+      }
     }
   }
 
-  // Clips content (frames only)
+  // Clips content — omit if true (default for frames)
   if ("clipsContent" in node) {
-    result.clipsContent = (node as FrameNode).clipsContent;
+    if (!(node as FrameNode).clipsContent) result.clipsContent = false;
   }
 
-  // Auto-layout
+  // Auto-layout — omit if none (serializeAutoLayout returns undefined for NONE)
   if ("layoutMode" in node) {
-    const frameNode = node as FrameNode;
-    result.autoLayout = serializeAutoLayout(frameNode);
+    const al = serializeAutoLayout(node as FrameNode);
+    if (al) {
+      // Compact padding: use single number if all sides equal
+      const p = al.padding;
+      if (p.top === p.right && p.right === p.bottom && p.bottom === p.left) {
+        (al as any).padding = p.top;
+      }
+      result.autoLayout = al;
+    }
   }
 
-  // Layout sizing (auto-layout children)
+  // Layout sizing — omit if FIXED (default)
   if ("layoutSizingHorizontal" in node) {
-    result.layoutSizingHorizontal = (node as any).layoutSizingHorizontal;
+    const lsh = (node as any).layoutSizingHorizontal;
+    if (lsh && lsh !== "FIXED") result.layoutSizingHorizontal = lsh;
   }
   if ("layoutSizingVertical" in node) {
-    result.layoutSizingVertical = (node as any).layoutSizingVertical;
+    const lsv = (node as any).layoutSizingVertical;
+    if (lsv && lsv !== "FIXED") result.layoutSizingVertical = lsv;
   }
 
-  // Min/max size constraints
+  // Min/max size — omit if 0/null/undefined
   if ("minWidth" in node) {
     const n = node as any;
-    if (n.minWidth !== undefined && n.minWidth !== null) result.minWidth = n.minWidth;
-    if (n.maxWidth !== undefined && n.maxWidth !== null) result.maxWidth = n.maxWidth;
-    if (n.minHeight !== undefined && n.minHeight !== null) result.minHeight = n.minHeight;
-    if (n.maxHeight !== undefined && n.maxHeight !== null) result.maxHeight = n.maxHeight;
+    if (n.minWidth) result.minWidth = n.minWidth;
+    if (n.maxWidth) result.maxWidth = n.maxWidth;
+    if (n.minHeight) result.minHeight = n.minHeight;
+    if (n.maxHeight) result.maxHeight = n.maxHeight;
   }
 
-  // Constraints
+  // Constraints — omit if default (SCALE, SCALE) or (MIN, MIN)
   if ("constraints" in node) {
     const c = (node as ConstraintMixin).constraints;
-    result.constraints = {
-      horizontal: c.horizontal,
-      vertical: c.vertical,
-    };
+    if (!(c.horizontal === "SCALE" && c.vertical === "SCALE") &&
+        !(c.horizontal === "MIN" && c.vertical === "MIN")) {
+      result.constraints = { horizontal: c.horizontal, vertical: c.vertical };
+    }
   }
 
-  // Text-specific
+  // Text-specific — always include (meaningful data)
   if (node.type === "TEXT") {
     const textNode = node as TextNode;
     result.characters = textNode.characters;
     result.textStyle = serializeTextStyle(textNode);
   }
 
-  // Component-specific
+  // Component-specific — always include (meaningful data)
   if (node.type === "COMPONENT") {
     result.componentKey = (node as ComponentNode).key;
   }
   if (node.type === "INSTANCE") {
     const instance = node as InstanceNode;
     result.componentKey = instance.mainComponent ? instance.mainComponent.key : undefined;
-    // Serialize component properties
     try {
       const props = instance.componentProperties;
-      if (props) {
+      if (props && Object.keys(props).length > 0) {
         result.componentProperties = {};
         for (const [key, val] of Object.entries(props)) {
           result.componentProperties[key] = {

@@ -8,9 +8,16 @@
  * Handles graceful shutdown on SIGINT/SIGTERM.
  */
 
+import dotenv from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "./shared/config.js";
 import { createLogger, type LogLevel } from "./shared/logger.js";
 import { RexMcpServer } from "./server/mcp-server.js";
+
+// Load .env from project root (won't override existing env vars)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 // ─── CLI Argument Parsing ───────────────────────────────────────────────────
 

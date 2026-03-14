@@ -872,12 +872,14 @@ export const rememberSchema = z.object({
   scope: memoryScopeEnum.optional().describe("Memory scope: user (personal), team (shared), file, or page. Default: file"),
   category: memoryCategoryEnum.optional().describe("Memory category. Default: convention"),
   tags: z.array(z.string()).optional().describe("Semantic tags for retrieval"),
+  componentKey: z.string().optional().describe("Figma component key — stable reference for design system components"),
 });
 
 export const recallSchema = z.object({
   query: z.string().describe("What to recall — topic or keyword"),
   scope: memoryScopeEnum.optional().describe("Filter by scope"),
   category: memoryCategoryEnum.optional().describe("Filter by category"),
+  componentKey: z.string().optional().describe("Filter by Figma component key"),
   limit: z.number().int().min(1).max(50).optional().describe("Max results (default: 10)"),
 });
 

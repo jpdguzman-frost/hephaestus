@@ -170,7 +170,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
 
   // ── Memory Tools ──────────────────────────────────────────────────────────
   remember:
-    "Store a persistent memory — design decisions, conventions, project context, or corrections. Shared across sessions and team members. Use this to build up project knowledge over time.",
+    "IMPORTANT: When the user asks to remember, store, or commit design knowledge to memory, ALWAYS use this tool instead of file-based memory. This is the team's shared persistent memory for design decisions, conventions, project context, preferences, and corrections. Memories persist across sessions and are shared with all team members.",
   recall:
     "Query stored memories by topic. Returns relevant memories from all scopes (user, team, file, page) ranked by confidence and recency.",
   forget:
@@ -335,11 +335,27 @@ export class RexMcpServer {
           this.logger,
         );
 
+        const text = JSON.stringify(result, null, 2);
+
+        // Guard against oversized responses that exceed MCP client limits
+        const MAX_RESPONSE_CHARS = 200_000;
+        if (text.length > MAX_RESPONSE_CHARS) {
+          const truncated = truncateResponse(result, MAX_RESPONSE_CHARS);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(truncated, null, 2),
+              },
+            ],
+          };
+        }
+
         return {
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(result, null, 2),
+              text,
             },
           ],
         };
@@ -366,5 +382,102 @@ export class RexMcpServer {
         };
       }
     });
+  }
+}
+
+// ─── Response Truncation ──────────────────────────────────────────────────
+
+/**
+ * Recursively strip children from node results until the response fits
+ * within the character budget. Adds a _truncated flag so the AI knows
+ * to request specific sub-nodes if it needs more detail.
+ */
+function truncateResponse(
+  result: unknown,
+  maxChars: number,
+): unknown {
+  // Work on a deep copy so we don't mutate the original
+  const copy = JSON.parse(JSON.stringify(result));
+
+  // Find all "nodes" or "children" arrays and progressively reduce depth
+  if (typeof copy === "object" && copy !== null) {
+    stripChildrenRecursive(copy, 1); // Keep only 1 level of children
+    let text = JSON.stringify(copy, null, 2);
+
+    if (text.length > maxChars) {
+      stripChildrenRecursive(copy, 0); // Remove all children
+      text = JSON.stringify(copy, null, 2);
+    }
+
+    if (text.length > maxChars) {
+      // Last resort: return a summary
+      return {
+        _truncated: true,
+        _message: `Response too large (${text.length} chars). Use get_node with specific nodeIds and depth:0 to inspect individual nodes.`,
+        _originalKeys: Object.keys(copy),
+      };
+    }
+
+    copy._truncated = true;
+    copy._message =
+      "Response was truncated to fit size limits. Use get_node with specific nodeIds for full detail.";
+  }
+
+  return copy;
+}
+
+function stripChildrenRecursive(
+  obj: Record<string, unknown>,
+  maxDepth: number,
+  currentDepth: number = 0,
+): void {
+  if (typeof obj !== "object" || obj === null) return;
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (typeof item === "object" && item !== null) {
+        stripChildrenRecursive(
+          item as Record<string, unknown>,
+          maxDepth,
+          currentDepth,
+        );
+      }
+    }
+    return;
+  }
+
+  if (currentDepth >= maxDepth && "children" in obj) {
+    const children = obj["children"] as unknown[];
+    if (Array.isArray(children) && children.length > 0) {
+      obj["_childCount"] = children.length;
+      obj["children"] = children.slice(0, 5).map((c) => {
+        if (typeof c === "object" && c !== null) {
+          const summary: Record<string, unknown> = {
+            nodeId: (c as Record<string, unknown>)["nodeId"],
+            name: (c as Record<string, unknown>)["name"],
+            type: (c as Record<string, unknown>)["type"],
+          };
+          if ((c as Record<string, unknown>)["children"]) {
+            summary._childCount = (
+              (c as Record<string, unknown>)["children"] as unknown[]
+            ).length;
+          }
+          return summary;
+        }
+        return c;
+      });
+      obj["_childrenTruncated"] = true;
+    }
+    return;
+  }
+
+  for (const value of Object.values(obj)) {
+    if (typeof value === "object" && value !== null) {
+      stripChildrenRecursive(
+        value as Record<string, unknown>,
+        maxDepth,
+        currentDepth + 1,
+      );
+    }
   }
 }

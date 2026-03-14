@@ -4,3 +4,4 @@ plugin/code.js
 *.DS_Store
 .claude/
 rex.config.json
+.env

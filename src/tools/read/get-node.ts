@@ -41,65 +41,77 @@ function serializeNode(
     nodeId: node.id,
     name: node.name,
     type: node.type,
-    visible: node.visible ?? true,
-    locked: node.locked ?? false,
   };
+
+  // Omit defaults: visible=true, locked=false
+  if (node.visible === false) base.visible = false;
+  if (node.locked === true) base.locked = true;
 
   // Position and size from absoluteBoundingBox
   if (node.absoluteBoundingBox) {
+    const bb = node.absoluteBoundingBox;
     base.position = {
-      x: node.absoluteBoundingBox.x,
-      y: node.absoluteBoundingBox.y,
+      x: Math.round(bb.x),
+      y: Math.round(bb.y),
     };
     base.size = {
-      width: node.absoluteBoundingBox.width,
-      height: node.absoluteBoundingBox.height,
+      width: Math.round(bb.width),
+      height: Math.round(bb.height),
     };
   }
 
   // Optional properties — include all if no filter is specified
   const includeAll = !properties || properties.length === 0;
 
+  // Opacity — omit if 1
   if (includeAll || properties?.includes("opacity")) {
-    if (node.opacity !== undefined) base.opacity = node.opacity;
+    if (node.opacity !== undefined && node.opacity !== 1) base.opacity = node.opacity;
   }
 
+  // Fills — omit if empty
   if (includeAll || properties?.includes("fills")) {
-    if (node.fills) base.fills = node.fills;
+    if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) base.fills = node.fills;
   }
 
+  // Strokes — omit if empty
   if (includeAll || properties?.includes("strokes")) {
-    if (node.strokes) base.strokes = node.strokes;
+    if (node.strokes && Array.isArray(node.strokes) && node.strokes.length > 0) base.strokes = node.strokes;
   }
 
+  // Effects — omit if empty
   if (includeAll || properties?.includes("effects")) {
-    if (node.effects) base.effects = node.effects;
+    if (node.effects && Array.isArray(node.effects) && node.effects.length > 0) base.effects = node.effects;
   }
 
+  // Corner radius — omit if 0
   if (includeAll || properties?.includes("cornerRadius")) {
-    if (node.cornerRadius !== undefined) {
+    if (node.cornerRadius !== undefined && node.cornerRadius !== 0) {
       base.cornerRadius = node.cornerRadius;
     } else if (node.rectangleCornerRadii) {
-      base.cornerRadius = {
-        topLeft: node.rectangleCornerRadii[0],
-        topRight: node.rectangleCornerRadii[1],
-        bottomRight: node.rectangleCornerRadii[2],
-        bottomLeft: node.rectangleCornerRadii[3],
-      };
+      const [tl, tr, br, bl] = node.rectangleCornerRadii;
+      if (tl !== 0 || tr !== 0 || br !== 0 || bl !== 0) {
+        if (tl === tr && tr === br && br === bl) {
+          base.cornerRadius = tl;
+        } else {
+          base.cornerRadius = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
+        }
+      }
     }
   }
 
+  // Auto-layout — omit if NONE
   if (includeAll || properties?.includes("autoLayout")) {
     if (node.layoutMode && node.layoutMode !== "NONE") {
+      const pt = node.paddingTop ?? 0, pr = node.paddingRight ?? 0;
+      const pb = node.paddingBottom ?? 0, pl = node.paddingLeft ?? 0;
+      const padding = (pt === pr && pr === pb && pb === pl)
+        ? pt
+        : { top: pt, right: pr, bottom: pb, left: pl };
+
       base.autoLayout = {
         direction: node.layoutMode === "HORIZONTAL" ? "horizontal" : "vertical",
         spacing: node.itemSpacing ?? 0,
-        padding: {
-          top: node.paddingTop ?? 0,
-          right: node.paddingRight ?? 0,
-          bottom: node.paddingBottom ?? 0,
-          left: node.paddingLeft ?? 0,
-        },
+        padding,
         primaryAxisAlign: node.primaryAxisAlignItems ?? "MIN",
         counterAxisAlign: node.counterAxisAlignItems ?? "MIN",
         primaryAxisSizing: node.primaryAxisSizingMode === "FIXED" ? "fixed" : "hug",
@@ -108,14 +120,25 @@ function serializeNode(
     }
   }
 
+  // Constraints — omit if default
   if (includeAll || properties?.includes("constraints")) {
-    if (node.constraints) base.constraints = node.constraints;
+    if (node.constraints) {
+      const { horizontal, vertical } = node.constraints;
+      if (!(horizontal === "SCALE" && vertical === "SCALE") &&
+          !(horizontal === "MIN" && vertical === "MIN")) {
+        base.constraints = node.constraints;
+      }
+    }
   }
 
+  // Blend mode — omit if NORMAL or PASS_THROUGH
   if (includeAll || properties?.includes("blendMode")) {
-    if (node.blendMode) base.blendMode = node.blendMode;
+    if (node.blendMode && node.blendMode !== "NORMAL" && node.blendMode !== "PASS_THROUGH") {
+      base.blendMode = node.blendMode;
+    }
   }
 
+  // Text — always meaningful
   if (includeAll || properties?.includes("characters")) {
     if (node.characters !== undefined) base.characters = node.characters;
   }
@@ -125,18 +148,28 @@ function serializeNode(
   }
 
   if (includeAll || properties?.includes("componentProperties")) {
-    if (node.componentProperties) base.componentProperties = node.componentProperties;
+    if (node.componentProperties && Object.keys(node.componentProperties).length > 0) {
+      base.componentProperties = node.componentProperties;
+    }
   }
 
   if (includeAll || properties?.includes("componentId")) {
     if (node.componentId) base.componentKey = node.componentId;
   }
 
-  // Recurse into children if depth > 0
+  // Recurse into children if depth > 0, cap at 100
   if (depth > 0 && node.children) {
-    base.children = node.children.map((child) =>
+    const maxChildren = 100;
+    const childSlice = node.children.length > maxChildren
+      ? node.children.slice(0, maxChildren)
+      : node.children;
+    base.children = childSlice.map((child) =>
       serializeNode(child, depth - 1, properties),
     );
+    if (node.children.length > maxChildren) {
+      base._childrenTruncated = true;
+      base._totalChildren = node.children.length;
+    }
   }
 
   return base;

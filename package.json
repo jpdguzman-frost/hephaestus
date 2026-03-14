@@ -1,6 +1,6 @@
 {
   "name": "rex-figma",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A stable, reliable MCP server for full read/write access to Figma's canvas",
   "type": "module",
   "main": "dist/index.js",
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "dotenv": "^17.3.1",
     "fastify": "^5.3.3",
     "mongodb": "^7.1.0",
     "uuid": "^11.1.0",

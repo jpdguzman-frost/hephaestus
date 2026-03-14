@@ -528,6 +528,19 @@ function getMemoryContext(context: ToolContext): {
   };
 }
 
+function addEmptyDebug(
+  response: Record<string, unknown>,
+  store: import("../memory/client.js").MemoryServiceClient,
+  memCtx: Record<string, unknown>,
+  hint: string,
+): void {
+  response._debug = {
+    serviceUrl: store.url,
+    contextUsed: memCtx,
+    hint,
+  };
+}
+
 async function handleNote(
   params: Record<string, unknown>,
   context: ToolContext,
@@ -620,16 +633,8 @@ async function handleNotes(
     count: results.length,
   };
 
-  // Add diagnostic context when results are empty
   if (results.length === 0) {
-    const serviceClient = "url" in store
-      ? (store as import("../memory/client.js").MemoryServiceClient)
-      : null;
-    response._debug = {
-      serviceUrl: serviceClient?.url ?? "direct",
-      contextUsed: memCtx,
-      hint: "Query returned 0 results. Check that the service has notes matching this context (fileKey, userId).",
-    };
+    addEmptyDebug(response, store, memCtx, "Query returned 0 results. Check that the service has notes matching this context (fileKey, userId).");
   }
 
   return response;
@@ -690,16 +695,8 @@ async function handleBrowseNotes(
     count: results.length,
   };
 
-  // Add diagnostic context when results are empty
   if (results.length === 0) {
-    const serviceClient = "url" in store
-      ? (store as import("../memory/client.js").MemoryServiceClient)
-      : null;
-    response._debug = {
-      serviceUrl: serviceClient?.url ?? "direct",
-      contextUsed: memCtx,
-      hint: "No notes found. Check that the service has notes matching this context (fileKey, userId). Use scope: 'team' to query cross-file notes.",
-    };
+    addEmptyDebug(response, store, memCtx, "No notes found. Check that the service has notes matching this context (fileKey, userId). Use scope: 'team' to query cross-file notes.");
   }
 
   return response;

@@ -8,13 +8,14 @@
 
 import { Poller, setupHttpBridge, httpRequestRaw } from "./poller";
 import { WSClient } from "./ws-client";
-import { Executor } from "./executor";
+import { Executor, uint8ArrayToBase64 } from "./executor";
 import { preloadFonts } from "./fonts";
 
 type TransportStatus = "websocket" | "http" | "disconnected";
 
 // Module-scope references
 var pollerRef: Poller | null = null;
+var wsRef: WSClient | null = null;
 var currentChannel: number | null = null;
 var executorRef: Executor | null = null;
 
@@ -39,8 +40,9 @@ async function main(): Promise<void> {
   // Set up the message bridge FIRST — needed for HTTP requests
   setupHttpBridge();
 
-  // Forward selection changes to UI
+  // Forward selection changes to UI (only when connected)
   figma.on("selectionchange", function() {
+    if (!pollerRef) return;
     var sel = figma.currentPage.selection;
     var items: Array<{ id: string; name: string; type: string }> = [];
     for (var i = 0; i < sel.length; i++) {
@@ -116,6 +118,10 @@ async function handleChannelReconnect(): Promise<void> {
 
 function handleChannelChange(): void {
   // Clean up existing connection
+  if (wsRef) {
+    wsRef.disconnect();
+    wsRef = null;
+  }
   if (pollerRef) {
     pollerRef.disconnect();
     pollerRef = null;
@@ -142,8 +148,13 @@ function handleChannelChange(): void {
 // ─── Relay Connection ──────────────────────────────────────────────────
 
 async function connectToRelay(relayUrl: string, channel: number): Promise<void> {
+  // Clean up previous WS client if reconnecting
+  if (wsRef) {
+    wsRef.disconnect();
+  }
   var executor = executorRef!;
   var ws = new WSClient(relayUrl, executor);
+  wsRef = ws;
 
   // Add WS, chat, and resize message handling
   var existingHandler = figma.ui.onmessage;
@@ -262,22 +273,7 @@ function handleChatSend(msg: { type: string; id: string; message: string }): voi
       constraint: { type: "WIDTH", value: 120 }
     };
     thumbnailPromise = targetNode.exportAsync(exportSettings).then(function(bytes) {
-      var binary = "";
-      for (var b = 0; b < bytes.length; b++) {
-        binary += String.fromCharCode(bytes[b]);
-      }
-      var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      var result = "";
-      for (var bi = 0; bi < binary.length; bi += 3) {
-        var a1 = binary.charCodeAt(bi);
-        var a2 = bi + 1 < binary.length ? binary.charCodeAt(bi + 1) : 0;
-        var a3 = bi + 2 < binary.length ? binary.charCodeAt(bi + 2) : 0;
-        result += base64Chars[a1 >> 2];
-        result += base64Chars[((a1 & 3) << 4) | (a2 >> 4)];
-        result += bi + 1 < binary.length ? base64Chars[((a2 & 15) << 2) | (a3 >> 6)] : "=";
-        result += bi + 2 < binary.length ? base64Chars[a3 & 63] : "=";
-      }
-      return "data:image/png;base64," + result;
+      return "data:image/png;base64," + uint8ArrayToBase64(bytes);
     }).catch(function() { return null; });
   } else {
     thumbnailPromise = Promise.resolve(null);
@@ -314,7 +310,6 @@ function handleChatSend(msg: { type: string; id: string; message: string }): voi
 // ─── Init ──────────────────────────────────────────────────────────────
 
 // Wire up channel messages before main() runs (needed since main shows UI first)
-var _origOnMessage = figma.ui.onmessage;
 figma.ui.onmessage = function(msg: unknown) {
   var message = msg as Record<string, unknown>;
   if (message && message.type === "channel-submit") {
@@ -328,9 +323,6 @@ figma.ui.onmessage = function(msg: unknown) {
   if (message && message.type === "channel-change") {
     handleChannelChange();
     return;
-  }
-  if (_origOnMessage) {
-    (_origOnMessage as (msg: unknown) => void)(msg);
   }
 };
 

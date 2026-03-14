@@ -80,8 +80,6 @@ function httpRequest(method: string, url: string, body?: unknown, headers?: Reco
   return new Promise((resolve) => {
     const requestId = `req_${++requestCounter}_${Date.now()}`;
 
-    pendingRequests.set(requestId, resolve);
-
     // Timeout safety
     const timer = setTimeout(() => {
       if (pendingRequests.has(requestId)) {

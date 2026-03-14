@@ -238,7 +238,7 @@ async function executeScreenshot(payload: Record<string, unknown>): Promise<unkn
 
 var B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-function uint8ArrayToBase64(bytes: Uint8Array): string {
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
   var result = "";
   var len = bytes.length;
   var i = 0;

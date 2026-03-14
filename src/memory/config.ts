@@ -2,26 +2,28 @@
 
 import type { MemoryConfig } from "./types.js";
 
+const DEFAULT_SERVICE_URL = "https://aux.frostdesigngroup.com/rex";
+
 /**
  * Load memory configuration from environment variables.
  *
  * Two modes:
- * - Service mode: REX_MEMORY_SERVICE_URL is set → HTTP client to remote service
- * - Direct mode: REX_MEMORY_ENABLED=true → direct MongoDB connection
+ * - Service mode (default): HTTP client to remote memory service
+ * - Direct mode: REX_MEMORY_DIRECT=true → direct MongoDB connection
  *
- * Service mode takes precedence if both are set.
+ * Memory is enabled by default via the hosted service.
+ * Set REX_MEMORY_ENABLED=false to disable entirely.
  */
 export function loadMemoryConfig(): MemoryConfig {
+  const disabled = process.env["REX_MEMORY_ENABLED"] === "false" ||
+    process.env["REX_MEMORY_ENABLED"] === "0";
+
   return {
-    enabled:
-      process.env["REX_MEMORY_ENABLED"] === "true" ||
-      process.env["REX_MEMORY_ENABLED"] === "1" ||
-      !!process.env["REX_MEMORY_SERVICE_URL"],
-    serviceUrl: process.env["REX_MEMORY_SERVICE_URL"],
+    enabled: !disabled,
+    serviceUrl: process.env["REX_MEMORY_SERVICE_URL"] ?? DEFAULT_SERVICE_URL,
     mongoUri:
       process.env["REX_MEMORY_MONGO_URI"] ?? "mongodb://localhost:27017",
-    dbName: process.env["REX_MEMORY_DB_NAME"] ?? "rex_memory",
-    teamId: process.env["REX_MEMORY_TEAM_ID"] ?? "default",
+    dbName: process.env["REX_MEMORY_DB_NAME"] ?? "rex",
     maxMemoriesPerSession: parseInt(
       process.env["REX_MEMORY_MAX_PER_SESSION"] ?? "30",
       10,

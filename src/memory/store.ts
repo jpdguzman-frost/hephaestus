@@ -28,6 +28,7 @@ interface QueryMemoryInput {
   query?: string;
   scope?: MemoryScope;
   category?: MemoryCategory;
+  componentKey?: string;
   context: MemoryContext;
   limit?: number;
   includeSuperseded?: boolean;
@@ -80,7 +81,7 @@ export class MemoryStore {
 
       // Create indexes
       await this.memories.createIndex(
-        { teamId: 1, scope: 1, confidence: -1 },
+        { scope: 1, confidence: -1 },
         { background: true },
       );
       await this.memories.createIndex(
@@ -92,6 +93,10 @@ export class MemoryStore {
         { background: true },
       );
       await this.memories.createIndex({ tags: 1 }, { background: true });
+      await this.memories.createIndex(
+        { componentKey: 1 },
+        { background: true, sparse: true },
+      );
       await this.memories.createIndex({ createdAt: 1 }, { background: true });
       await this.memories.createIndex(
         { supersededBy: 1 },
@@ -171,16 +176,10 @@ export class MemoryStore {
       );
     }
 
-    const entry: MemoryEntry = {
+    // Build entry with only populated fields — avoid storing nulls in MongoDB
+    const entry: Record<string, unknown> = {
       _id: generateId(),
       scope: input.scope,
-      teamId: input.context.teamId,
-      userId: input.scope === "user" ? input.context.userId : undefined,
-      fileKey:
-        input.scope === "file" || input.scope === "page"
-          ? input.context.fileKey
-          : undefined,
-      pageId: input.scope === "page" ? input.context.pageId : undefined,
       category: input.category,
       content: input.content,
       tags: input.tags ?? [],
@@ -191,8 +190,22 @@ export class MemoryStore {
       lastAccessedAt: now,
       confidence: input.source === "corrected" ? 1.0 : input.source === "inferred" ? 0.6 : 0.9,
       accessCount: 0,
-      relatedTo: existing ? [existing._id] : undefined,
     };
+
+    // Scope keys — only include when relevant
+    if (input.scope === "user" && input.context.userId) {
+      entry.userId = input.context.userId;
+    }
+    if ((input.scope === "file" || input.scope === "page") && input.context.fileKey) {
+      entry.fileKey = input.context.fileKey;
+      if (input.context.fileName) entry.fileName = input.context.fileName;
+    }
+    if (input.context.componentKey) {
+      entry.componentKey = input.context.componentKey;
+    }
+    if (existing) {
+      entry.relatedTo = [existing._id];
+    }
 
     await this.memories!.insertOne(entry as any);
 
@@ -200,26 +213,24 @@ export class MemoryStore {
     if (existing) {
       await this.memories!.updateOne(
         { _id: existing._id },
-        { $set: { supersededBy: entry._id } },
+        { $set: { supersededBy: entry._id as string } },
       );
     }
 
     this.logger.debug("Memory stored", {
-      id: entry._id,
-      scope: entry.scope,
-      category: entry.category,
+      id: entry._id as string,
+      scope: entry.scope as string,
+      category: entry.category as string,
     });
 
-    return entry;
+    return entry as unknown as MemoryEntry;
   }
 
   /** Query memories relevant to a topic. */
   async recall(input: QueryMemoryInput): Promise<MemoryEntry[]> {
     this.ensureConnected();
 
-    const filter: Record<string, unknown> = {
-      teamId: input.context.teamId,
-    };
+    const filter: Record<string, unknown> = {};
 
     // Scope filter
     if (input.scope) {
@@ -242,6 +253,11 @@ export class MemoryStore {
       filter["$or"] = buildScopeFilter(input.context);
     } else {
       applyScopeKey(filter, input.scope, input.context);
+    }
+
+    // Component key filter
+    if (input.componentKey) {
+      filter["componentKey"] = input.componentKey;
     }
 
     // Confidence threshold
@@ -293,14 +309,12 @@ export class MemoryStore {
     if (id) {
       const result = await this.memories!.deleteOne({
         _id: id,
-        teamId: context.teamId,
       } as any);
       return result.deletedCount;
     }
 
     if (query) {
       const filter: Record<string, unknown> = {
-        teamId: context.teamId,
         $text: { $search: query },
       };
       if (scope) {
@@ -324,9 +338,7 @@ export class MemoryStore {
   ): Promise<MemoryEntry[]> {
     this.ensureConnected();
 
-    const filter: Record<string, unknown> = {
-      teamId: context.teamId,
-    };
+    const filter: Record<string, unknown> = {};
 
     if (scope) {
       filter["scope"] = scope;
@@ -356,7 +368,6 @@ export class MemoryStore {
     const limit = maxEntries ?? this.config.maxMemoriesPerSession;
 
     const filter: Record<string, unknown> = {
-      teamId: context.teamId,
       supersededBy: { $exists: false },
       confidence: { $gt: 0.3 },
       $or: buildScopeFilter(context),
@@ -400,7 +411,6 @@ export class MemoryStore {
 
   /** Clean up stale, low-confidence, and superseded memories. */
   async cleanup(
-    teamId: string,
     options?: CleanupOptions,
   ): Promise<CleanupResult> {
     this.ensureConnected();
@@ -415,7 +425,6 @@ export class MemoryStore {
 
     // 1. Stale: old + never accessed
     const staleFilter = {
-      teamId,
       createdAt: { $lt: cutoffDate },
       accessCount: 0,
     };
@@ -423,7 +432,6 @@ export class MemoryStore {
 
     // 2. Low confidence
     const lowConfFilter = {
-      teamId,
       confidence: { $lt: minConfidence },
       supersededBy: { $exists: false },
     };
@@ -435,7 +443,6 @@ export class MemoryStore {
     let supersededCount = 0;
     if (removeSuperseded) {
       const supersededFilter = {
-        teamId,
         supersededBy: { $exists: true },
       };
       supersededCount = await this.memories!.countDocuments(
@@ -452,7 +459,6 @@ export class MemoryStore {
 
       if (removeSuperseded) {
         const r3 = await this.memories!.deleteMany({
-          teamId,
           supersededBy: { $exists: true },
         } as any);
         totalRemoved += r3.deletedCount;
@@ -471,13 +477,12 @@ export class MemoryStore {
   }
 
   /** Apply confidence decay to all memories (call periodically). */
-  async applyDecay(teamId: string): Promise<number> {
+  async applyDecay(): Promise<number> {
     this.ensureConnected();
 
     // Decay all memories by -0.01 per day since last update, floor at 0.1
     const result = await this.memories!.updateMany(
       {
-        teamId,
         confidence: { $gt: 0.1 },
         supersededBy: { $exists: false },
       } as any,
@@ -532,7 +537,6 @@ export class MemoryStore {
   ): Promise<MemoryEntry | null> {
     try {
       const filter: Record<string, unknown> = {
-        teamId: context.teamId,
         scope,
         supersededBy: { $exists: false },
         $text: { $search: content },
@@ -603,7 +607,7 @@ function applyScopeKey(
       if (context.fileKey) filter["fileKey"] = context.fileKey;
       if (context.pageId) filter["pageId"] = context.pageId;
       break;
-    // "team" needs no extra key — teamId is already in the filter
+    // "team" needs no extra key — team scope is global
   }
 }
 

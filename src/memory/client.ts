@@ -47,6 +47,7 @@ export class MemoryServiceClient {
   private baseUrl: string;
   private logger: Logger;
   private _connected = false;
+  private _connecting: Promise<void> | null = null;
 
   constructor(baseUrl: string, logger: Logger) {
     // Strip trailing slash
@@ -77,18 +78,40 @@ export class MemoryServiceClient {
     }
   }
 
+  /**
+   * Ensure the client is connected, retrying if the initial connect failed.
+   * Called lazily before each memory operation.
+   */
+  async ensureConnected(): Promise<boolean> {
+    if (this._connected) return true;
+
+    // Avoid concurrent reconnect attempts
+    if (this._connecting) {
+      await this._connecting;
+      return this._connected;
+    }
+
+    this._connecting = this.connect();
+    try {
+      await this._connecting;
+    } finally {
+      this._connecting = null;
+    }
+    return this._connected;
+  }
+
   async disconnect(): Promise<void> {
     this._connected = false;
   }
 
   async remember(input: CreateMemoryInput): Promise<MemoryEntry> {
     const resp = await this.post("/api/memories", input);
-    return resp.memory as MemoryEntry;
+    return normalizeEntry(resp.memory as Record<string, unknown>);
   }
 
   async recall(input: QueryMemoryInput): Promise<MemoryEntry[]> {
     const resp = await this.post("/api/memories/recall", input);
-    return (resp.memories as MemoryEntry[]) ?? [];
+    return normalizeEntries(resp.memories as Record<string, unknown>[]);
   }
 
   async forget(
@@ -120,7 +143,7 @@ export class MemoryServiceClient {
       limit,
       includeSuperseded,
     });
-    return (resp.memories as MemoryEntry[]) ?? [];
+    return normalizeEntries(resp.memories as Record<string, unknown>[]);
   }
 
   async loadForSession(
@@ -131,21 +154,19 @@ export class MemoryServiceClient {
       context,
       maxEntries,
     });
-    return (resp.memories as MemoryEntry[]) ?? [];
+    return normalizeEntries(resp.memories as Record<string, unknown>[]);
   }
 
   async cleanup(
-    teamId: string,
     options?: CleanupOptions,
   ): Promise<CleanupResult> {
     return this.post("/api/memories/cleanup", {
-      teamId,
       ...options,
     }) as unknown as Promise<CleanupResult>;
   }
 
-  async applyDecay(teamId: string): Promise<number> {
-    const resp = await this.post("/api/memories/decay", { teamId });
+  async applyDecay(): Promise<number> {
+    const resp = await this.post("/api/memories/decay", {});
     return (resp.modified as number) ?? 0;
   }
 
@@ -175,4 +196,19 @@ export class MemoryServiceClient {
       throw err;
     }
   }
+}
+
+// ─── Response Normalization ────────────────────────────────────────────────
+// The memory service returns `id` but MemoryEntry expects `_id`.
+
+function normalizeEntry(raw: Record<string, unknown>): MemoryEntry {
+  if (raw.id && !raw._id) {
+    raw._id = raw.id;
+  }
+  return raw as unknown as MemoryEntry;
+}
+
+function normalizeEntries(raw: Record<string, unknown>[] | undefined): MemoryEntry[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.map(normalizeEntry);
 }

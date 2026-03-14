@@ -23,10 +23,12 @@ export interface MemoryEntry {
   scope: MemoryScope;
 
   // Scope keys
-  teamId: string;
   userId?: string;
   fileKey?: string;
-  pageId?: string;
+  fileName?: string;
+
+  // Design system reference (stable across publishes)
+  componentKey?: string;
 
   // Content
   category: MemoryCategory;
@@ -52,16 +54,17 @@ export interface MemoryConfig {
   serviceUrl?: string;
   mongoUri: string;
   dbName: string;
-  teamId: string;
   maxMemoriesPerSession: number;
   cleanupIntervalHours: number;
 }
 
 /** Context passed to memory operations from the active session. */
 export interface MemoryContext {
-  teamId: string;
   userId?: string;
   userName?: string;
   fileKey?: string;
+  fileName?: string;
   pageId?: string;
+  pageName?: string;
+  componentKey?: string;
 }

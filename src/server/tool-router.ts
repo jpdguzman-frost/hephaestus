@@ -376,6 +376,8 @@ async function handleGetStatus(
   const state = connectionInfo["state"] as string;
   const transport = connectionInfo["transport"] as string | undefined;
 
+  const memoryStore = context.relay.memoryStore;
+
   return {
     state,
     transport: {
@@ -393,6 +395,11 @@ async function handleGetStatus(
       inFlight: queueStats.inFlight,
       completed: healthMetrics.commands.success,
       failed: healthMetrics.commands.failed,
+    },
+    memory: {
+      enabled: !!memoryStore,
+      connected: memoryStore?.isConnected ?? false,
+      type: memoryStore ? ("ensureConnected" in memoryStore ? "service" : "direct") : null,
     },
     uptime: Math.floor(healthMetrics.connection.uptime / 1000),
   };
@@ -474,23 +481,43 @@ async function handleSendChatChunk(
 
 // ─── Memory Tool Handlers ────────────────────────────────────────────────────
 
+/**
+ * Get the memory store, ensuring it's connected (lazy-connect on first use).
+ * Returns null if memory is disabled or the store can't connect.
+ */
+async function getMemoryStore(
+  context: ToolContext,
+): Promise<import("../memory/store.js").MemoryStore | import("../memory/client.js").MemoryServiceClient | null> {
+  const store = context.relay.memoryStore;
+  if (!store) return null;
+
+  if (!store.isConnected && "ensureConnected" in store) {
+    await (store as import("../memory/client.js").MemoryServiceClient).ensureConnected();
+  }
+
+  return store.isConnected ? store : null;
+}
+
 function getMemoryContext(context: ToolContext): {
-  teamId: string;
   userId?: string;
   userName?: string;
   fileKey?: string;
+  fileName?: string;
   pageId?: string;
+  pageName?: string;
 } {
   const connectionInfo = context.relay.connection.getConnectionInfo();
   const userInfo = connectionInfo["user"] as
     | { id: string; name: string }
     | undefined;
+  const fileKey = connectionInfo["fileKey"] as string | undefined;
   return {
-    teamId: context.relay.memoryTeamId ?? "default",
     userId: userInfo?.id,
     userName: userInfo?.name,
-    fileKey: connectionInfo["fileKey"] as string | undefined,
-    pageId: undefined, // Page ID from plugin context if available
+    fileKey: fileKey !== "unknown" ? fileKey : undefined,
+    fileName: connectionInfo["fileName"] as string | undefined,
+    pageId: connectionInfo["pageId"] as string | undefined,
+    pageName: connectionInfo["pageName"] as string | undefined,
   };
 }
 
@@ -498,21 +525,34 @@ async function handleRemember(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
+  const store = await getMemoryStore(context);
+  if (!store) {
     return {
       status: "disabled",
       message:
-        "Memory system is not enabled. Set REX_MEMORY_ENABLED=true and configure MongoDB.",
+        "Memory system is not available. Check that the memory service is reachable.",
     };
   }
 
   const memCtx = getMemoryContext(context);
+
+  // Auto-tag with pageName as a soft reference
+  const tags = (params["tags"] as string[] | undefined) ?? [];
+  if (memCtx.pageName && !tags.includes(`page:${memCtx.pageName}`)) {
+    tags.push(`page:${memCtx.pageName}`);
+  }
+
+  // Pass componentKey if provided
+  const componentKey = params["componentKey"] as string | undefined;
+  if (componentKey) {
+    memCtx.componentKey = componentKey;
+  }
+
   const entry = await store.remember({
     scope: (params["scope"] as any) ?? "file",
     category: (params["category"] as any) ?? "convention",
     content: params["content"] as string,
-    tags: params["tags"] as string[] | undefined,
+    tags,
     source: "explicit",
     context: memCtx,
   });
@@ -530,8 +570,8 @@ async function handleRecall(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
+  const store = await getMemoryStore(context);
+  if (!store) {
     return { status: "disabled", memories: [] };
   }
 
@@ -540,6 +580,7 @@ async function handleRecall(
     query: params["query"] as string,
     scope: params["scope"] as any,
     category: params["category"] as any,
+    componentKey: params["componentKey"] as string | undefined,
     limit: params["limit"] as number | undefined,
     context: memCtx,
   });
@@ -564,8 +605,8 @@ async function handleForget(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
+  const store = await getMemoryStore(context);
+  if (!store) {
     return { status: "disabled" };
   }
 
@@ -584,8 +625,8 @@ async function handleMemories(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
+  const store = await getMemoryStore(context);
+  if (!store) {
     return { status: "disabled", memories: [] };
   }
 
@@ -619,13 +660,12 @@ async function handleMemoryCleanup(
   params: Record<string, unknown>,
   context: ToolContext,
 ): Promise<Record<string, unknown>> {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
+  const store = await getMemoryStore(context);
+  if (!store) {
     return { status: "disabled" };
   }
 
-  const teamId = context.relay.memoryTeamId ?? "default";
-  const result = await store.cleanup(teamId, {
+  const result = await store.cleanup({
     dryRun: params["dryRun"] as boolean | undefined,
     maxAgeDays: params["maxAgeDays"] as number | undefined,
     minConfidence: params["minConfidence"] as number | undefined,

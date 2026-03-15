@@ -312,11 +312,23 @@ export class Poller {
           figma.ui.postMessage({ type: chatListeningNow ? "chat-available" : "chat-unavailable" });
         }
 
-        // Forward chat responses to UI (deduped against WS-delivered ones)
-        var chatResponses = data.chatResponses as Array<{ id: string; message: string }> | undefined;
+        // Forward chat responses/chunks to UI
+        var chatResponses = data.chatResponses as Array<{ id: string; message: string; isError?: boolean; _isChunk?: boolean; _done?: boolean }> | undefined;
         if (chatResponses && chatResponses.length > 0) {
           for (var j = 0; j < chatResponses.length; j++) {
-            postChatResponseDeduped(chatResponses[j].id, chatResponses[j].message);
+            var cr = chatResponses[j];
+            if (cr._isChunk) {
+              // Forward chunks directly — they have their own UI-level dedup
+              figma.ui.postMessage({
+                type: "chat-chunk",
+                id: cr.id,
+                delta: cr.message,
+                done: cr._done || false,
+              });
+            } else {
+              // Final responses go through transport-level dedup
+              postChatResponseDeduped(cr.id, cr.message, cr.isError);
+            }
           }
         }
 

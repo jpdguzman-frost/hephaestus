@@ -2044,7 +2044,8 @@
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 
-  var seenResponseIds = {};
+  var seenResponseIds = {};    // dedup for complete chat-response messages
+  var completedStreamIds = {}; // dedup for chat-chunk streams (separate from responses)
   function receiveChatResponse(data) {
     if (data.id && seenResponseIds[data.id]) return;
     if (data.id) seenResponseIds[data.id] = true;
@@ -2088,7 +2089,9 @@
   var streamingMessages = {};
 
   function handleChatChunk(data) {
-    if (data.id && seenResponseIds[data.id]) return;
+    // Use completedStreamIds (not seenResponseIds) so streaming completion
+    // doesn't block a subsequent send_chat_response with the same ID.
+    if (data.id && completedStreamIds[data.id]) return;
 
     hasMessages = true;
     updateChatDisconnectedState();
@@ -2121,7 +2124,7 @@
       // Switch label from streaming to answered
       stream.label.className = "msg-label";
       stream.label.textContent = "Rex answered";
-      seenResponseIds[data.id] = true;
+      completedStreamIds[data.id] = true;
       delete streamingMessages[data.id];
     }
   }

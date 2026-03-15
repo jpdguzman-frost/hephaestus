@@ -452,11 +452,12 @@ export class RelayServer {
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
   sendChatChunk(chunk: { id: string; delta: string; done: boolean; timestamp: number }): void {
-    // ALWAYS queue for HTTP polling — reliable baseline
-    this.chatOutbox.push({ id: chunk.id, message: chunk.delta, timestamp: chunk.timestamp, _isChunk: true, _done: chunk.done } as typeof this.chatOutbox[number]);
+    const wsOpen = this.wsClient?.readyState === WebSocket.OPEN;
 
-    // Also push via WebSocket for instant delivery (best-effort)
-    if (this.wsClient?.readyState === WebSocket.OPEN) {
+    // Prefer WebSocket for chunks (real-time delivery). Fall back to HTTP
+    // polling only if WS is unavailable. Sending via both transports would
+    // cause duplicate deltas in the streaming UI.
+    if (wsOpen) {
       try {
         const msg: WsMessage = {
           type: "command",
@@ -464,11 +465,15 @@ export class RelayServer {
           payload: { chatChunk: chunk } as unknown as Record<string, unknown>,
           timestamp: Date.now(),
         };
-        this.wsClient.send(JSON.stringify(msg));
+        this.wsClient!.send(JSON.stringify(msg));
+        return; // WS delivered — skip HTTP queue
       } catch {
-        // WS send failed — HTTP polling will deliver it
+        // WS send failed — fall through to HTTP queue
       }
     }
+
+    // HTTP polling fallback
+    this.chatOutbox.push({ id: chunk.id, message: chunk.delta, timestamp: chunk.timestamp, _isChunk: true, _done: chunk.done } as typeof this.chatOutbox[number]);
   }
 
   /**

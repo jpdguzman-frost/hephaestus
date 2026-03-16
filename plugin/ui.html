@@ -730,6 +730,74 @@
     padding-right: 12px;
   }
 
+  /* ─── Note Cards ─── */
+  .note-card {
+    background: #2E2A28;
+    border-left: 2px solid #F06800;
+    border-radius: 0 6px 6px 0;
+    padding: 16px 22px;
+    margin: 4px 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .note-card.saved {
+    border-left-color: #2EBF78;
+  }
+  .note-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .note-card-category {
+    color: #F06800;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .saved .note-card-category {
+    color: #2EBF78;
+  }
+  .note-card-sep {
+    color: #F06800;
+    opacity: 0.5;
+    font-size: 10px;
+  }
+  .saved .note-card-sep {
+    color: #2EBF78;
+  }
+  .note-card-author {
+    color: rgba(255,255,255,0.5);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .note-card-body {
+    color: #DBD6D2;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 150%;
+  }
+  .note-card-actions {
+    margin-top: 22px;
+  }
+  .note-card-actions-prompt {
+    color: rgba(255,255,255,0.5);
+    font-size: 10px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .note-card-actions-row {
+    display: flex;
+    gap: 12px;
+  }
+  .note-card-action {
+    color: #EEEDEC;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .note-card-action:hover {
+    opacity: 0.8;
+  }
+
   /* ─── Channel Input Screen ─── */
   #channel-screen {
     display: none;
@@ -1783,6 +1851,27 @@
   chatEmptyText.textContent = pickRandom(chatWelcomePhrases);
   chatInput.placeholder = pickRandom(chatPlaceholderPhrases);
 
+  // Delegated click handler for note card actions
+  chatMessages.addEventListener("click", function(e) {
+    var target = e.target;
+    if (target.classList.contains("note-card-action")) {
+      var action = target.getAttribute("data-action");
+      if (action) {
+        chatMsgCounter++;
+        var msgId = "chat_" + chatMsgCounter + "_" + Date.now();
+        appendChatMessage("user", action);
+        showChatTyping();
+        parent.postMessage({
+          pluginMessage: {
+            type: "chat-send",
+            id: msgId,
+            message: action
+          }
+        }, "*");
+      }
+    }
+  });
+
   function setChatAvailable(available) {
     if (available) chatAvailable = true;
   }
@@ -1994,6 +2083,37 @@
       html += "</tbody></table></div>";
       return html;
     });
+
+    // Note cards (:::surfaced{...} and :::saved{...})
+    escaped = escaped.replace(
+      /:::(surfaced|saved)\{category="([^"]*)"(?:\s+by="([^"]*)")?\}\n([\s\S]*?)(?:::action ([^\n]*)\n)?:::/g,
+      function(match, variant, category, author, body, actionLine) {
+        var html = '<div class="note-card ' + variant + '">';
+        html += '<div class="note-card-header">';
+        html += '<span class="note-card-category">' + category + '</span>';
+        if (author) {
+          html += '<span class="note-card-sep">&middot;</span>';
+          html += '<span class="note-card-author">by ' + author + '</span>';
+        }
+        html += '</div>';
+        html += '<div class="note-card-body">' + body.trim().replace(/\n/g, '<br>') + '</div>';
+        if (actionLine) {
+          var actions = actionLine.split('|').map(function(a) { return a.trim(); });
+          html += '<div class="note-card-actions">';
+          html += '<div class="note-card-actions-prompt">Do you want to</div>';
+          html += '<div class="note-card-actions-row">';
+          for (var i = 0; i < actions.length; i++) {
+            html += '<span class="note-card-action" data-action="' + actions[i] + '">' + actions[i] + '</span>';
+          }
+          html += '</div></div>';
+        }
+        html += '</div>';
+        return html;
+      }
+    );
+
+    // Collapse blank lines between consecutive note cards
+    escaped = escaped.replace(/(<\/div>)\n+(<div class="note-card)/g, '$1$2');
 
     // Line breaks
     escaped = escaped.replace(/\n/g, '<br>');

@@ -541,6 +541,48 @@ function addEmptyDebug(
   };
 }
 
+// ─── NoteCard Formatting ──────────────────────────────────────────────────────
+
+const CATEGORY_LABELS: Record<string, string> = {
+  convention: "Convention",
+  decision: "Decision",
+  context: "Context",
+  rejection: "Rejected",
+  relationship: "Relationship",
+  preference: "Preference",
+  correction: "Correction",
+};
+
+interface NoteCardInput {
+  category: string;
+  content: string;
+  createdBy?: string;
+  confidence?: number;
+}
+
+function formatSurfacedCard(note: NoteCardInput): string {
+  const label = CATEGORY_LABELS[note.category] ?? note.category;
+  const confTag = (note.confidence ?? 1) < 0.5 ? " (low confidence)" : "";
+  const by = note.createdBy || "Rex";
+  return `:::surfaced{category="${label}${confTag}" by="${by}"}\n${note.content}\n:::`;
+}
+
+function formatSavedCard(label: string, summary: string): string {
+  return `:::saved{category="${label}" by="Rex"}\n${summary}\n:::`;
+}
+
+const SURFACED_FORMAT_HINT =
+  "When sending these notes to chat via send_chat_response/send_chat_chunk, use the _chatMarkdown field. " +
+  "Condense each card body to 1-3 sentences — keep exact values (hex, px, component names) but drop verbose explanations, " +
+  "**Why:**/**How to apply:** sections, timestamps, and tags. Preserve **bold** sparingly for the single most important value. " +
+  "Max 5 cards per response in relevance order. Add a brief intro line before cards and a closing line after. " +
+  "Add :::action lines ONLY when a note conflicts with the user's current request (max 3 short labels). " +
+  "If more notes exist than shown, mention how many remain.";
+
+const SAVED_FORMAT_HINT =
+  "When sending to chat via send_chat_response/send_chat_chunk, use the _chatMarkdown field. " +
+  "Condense the body to a short summary of what was saved. Never add actions to saved cards.";
+
 async function handleNote(
   params: Record<string, unknown>,
   context: ToolContext,
@@ -588,6 +630,9 @@ async function handleNote(
     context: memCtx,
   });
 
+  const savedLabel = "Saved to notes";
+  const savedContent = params["content"] as string;
+
   return {
     _source: "rex-cloud",
     status: "stored",
@@ -595,6 +640,8 @@ async function handleNote(
     scope: entry.scope,
     category: entry.category,
     confidence: entry.confidence,
+    _chatMarkdown: formatSavedCard(savedLabel, savedContent),
+    _formatHint: SAVED_FORMAT_HINT,
   };
 }
 
@@ -617,24 +664,36 @@ async function handleNotes(
     context: memCtx,
   });
 
+  const notesData = results.map((m) => ({
+    id: m._id,
+    scope: m.scope,
+    category: m.category,
+    content: m.content,
+    tags: m.tags,
+    confidence: m.confidence,
+    createdBy: m.createdBy?.name,
+    createdAt: m.createdAt,
+    accessCount: m.accessCount,
+  }));
+
   const response: Record<string, unknown> = {
     _source: "rex-cloud",
-    notes: results.map((m) => ({
-      id: m._id,
-      scope: m.scope,
-      category: m.category,
-      content: m.content,
-      tags: m.tags,
-      confidence: m.confidence,
-      createdBy: m.createdBy?.name,
-      createdAt: m.createdAt,
-      accessCount: m.accessCount,
-    })),
+    notes: notesData,
     count: results.length,
   };
 
   if (results.length === 0) {
     addEmptyDebug(response, store, memCtx, "Query returned 0 results. Check that the service has notes matching this context (fileKey, userId).");
+  } else {
+    response._chatMarkdown = notesData
+      .map((n) => formatSurfacedCard({
+        category: n.category,
+        content: n.content,
+        createdBy: n.createdBy,
+        confidence: n.confidence,
+      }))
+      .join("\n\n");
+    response._formatHint = SURFACED_FORMAT_HINT;
   }
 
   return response;
@@ -678,25 +737,37 @@ async function handleBrowseNotes(
     params["includeSuperseded"] as boolean | undefined,
   );
 
+  const notesData = results.map((m) => ({
+    id: m._id,
+    scope: m.scope,
+    category: m.category,
+    content: m.content,
+    tags: m.tags,
+    confidence: m.confidence,
+    createdBy: m.createdBy?.name,
+    createdAt: m.createdAt,
+    accessCount: m.accessCount,
+    supersededBy: m.supersededBy,
+  }));
+
   const response: Record<string, unknown> = {
     _source: "rex-cloud",
-    notes: results.map((m) => ({
-      id: m._id,
-      scope: m.scope,
-      category: m.category,
-      content: m.content,
-      tags: m.tags,
-      confidence: m.confidence,
-      createdBy: m.createdBy?.name,
-      createdAt: m.createdAt,
-      accessCount: m.accessCount,
-      supersededBy: m.supersededBy,
-    })),
+    notes: notesData,
     count: results.length,
   };
 
   if (results.length === 0) {
     addEmptyDebug(response, store, memCtx, "No notes found. Check that the service has notes matching this context (fileKey, userId). Use scope: 'team' to query cross-file notes.");
+  } else {
+    response._chatMarkdown = notesData
+      .map((n) => formatSurfacedCard({
+        category: n.category,
+        content: n.content,
+        createdBy: n.createdBy,
+        confidence: n.confidence,
+      }))
+      .join("\n\n");
+    response._formatHint = SURFACED_FORMAT_HINT;
   }
 
   return response;

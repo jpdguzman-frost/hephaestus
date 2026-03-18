@@ -414,8 +414,8 @@ export class RelayServer {
       chatSession.lastMessageAt = entry.timestamp;
       chatSession.summary = entry.message.slice(0, 100);
 
-      // Persist session metadata every 5 messages to avoid flooding the memory service
-      if (this._memoryStore && chatSession.messageCount % 5 === 0) {
+      // Persist session metadata on every message so summaries are always up-to-date
+      if (this._memoryStore) {
         this._memoryStore.updateSession(chatSession, ctx).catch((err) => {
           this.logger.warn("Failed to update chat session", {
             sessionId: chatSession.sessionId,

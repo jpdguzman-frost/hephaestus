@@ -179,6 +179,10 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       figma.ui.resize(message.width as number, message.height as number);
       return;
     }
+    if (message && message.type === "fetch-sessions") {
+      fetchAndSendSessions(poller);
+      return;
+    }
     if (message && message.type === "session-create") {
       handleSessionCreate();
       return;
@@ -222,8 +226,8 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
     figma.ui.postMessage({ type: "channel-connected", channel: channel });
     reportStatus("http", channel);
 
-    // Show session picker and load sessions list
-    showSessionPicker(poller).catch(function(e) { console.warn("Session picker failed:", e); });
+    // Status screen shows automatically via showConnectedUI.
+    // Session picker is triggered when user clicks "Talk Now".
 
     var sessionId = poller.getSessionId();
     if (sessionId) ws.setSessionId(sessionId);
@@ -279,12 +283,7 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
 
 // ─── Session Picker ───────────────────────────────────────────────────
 
-async function showSessionPicker(poller: Poller): Promise<void> {
-  // Resize and tell UI to show session picker
-  figma.ui.resize(420, 539);
-  figma.ui.postMessage({ type: "show-session-picker" });
-
-  // Fetch sessions list from server
+async function fetchAndSendSessions(poller: Poller): Promise<void> {
   try {
     var resp = await poller.getAuthenticated("/sessions");
     if (resp.status >= 200 && resp.status < 300 && resp.body) {

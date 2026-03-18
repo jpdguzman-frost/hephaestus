@@ -1407,7 +1407,7 @@
       <div class="sp-pills">
         <span class="sp-pill" id="sp-pill-status">Status</span>
         <span class="sp-pill active" id="sp-pill-talk">Talk</span>
-        <span class="sp-pill" id="sp-pill-history">History</span>
+        <span class="sp-pill" id="sp-pill-history">Sessions</span>
       </div>
     </div>
     <div id="session-picker-content">
@@ -2855,18 +2855,22 @@
     }
   }
 
-  function renderSessionList(sessions) {
+  var allSessions = []; // Store full list for "view all"
+
+  function renderSessionList(sessions, showAll) {
+    if (sessions && sessions.length > 0) allSessions = sessions;
+    var displaySessions = showAll ? allSessions : (sessions || allSessions);
     sessionListEl.innerHTML = "";
-    if (!sessions || sessions.length === 0) {
+    if (!displaySessions || displaySessions.length === 0) {
       var empty = document.createElement("div");
       empty.id = "session-empty";
       empty.textContent = "No sessions yet. Start a new one!";
       sessionListEl.appendChild(empty);
       return;
     }
-    var maxItems = Math.min(sessions.length, 3);
+    var maxItems = showAll ? displaySessions.length : Math.min(displaySessions.length, 3);
     for (var i = 0; i < maxItems; i++) {
-      var s = sessions[i];
+      var s = displaySessions[i];
       if (i > 0) {
         var divider = document.createElement("div");
         divider.className = "session-divider";
@@ -2983,10 +2987,13 @@
     }
     // Otherwise stay in picker — user needs to pick a session first
   });
-  // History pill — already showing sessions, no action needed
-  // "View previous conversations" — sessions list already visible
+  // Sessions pill — show all sessions
+  document.getElementById("sp-pill-history").addEventListener("click", function() {
+    renderSessionList(null, true);
+  });
+  // "View previous conversations" — show all sessions
   document.getElementById("sp-view-all").addEventListener("click", function() {
-    // Future: load more sessions beyond the 3 shown
+    renderSessionList(null, true);
   });
 
   function showDisconnectedOverlay(channel) {

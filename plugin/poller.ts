@@ -159,6 +159,11 @@ export class Poller {
     return httpRequest("POST", this.baseUrl + path, body, this.getHeaders(), 5000);
   }
 
+  /** Send an authenticated GET request through the HTTP bridge. */
+  async getAuthenticated(path: string): Promise<HttpResponse> {
+    return httpRequest("GET", this.baseUrl + path, undefined, this.getHeaders(), 5000);
+  }
+
   async connect(): Promise<boolean> {
     try {
       // Step 1: Health check
@@ -342,6 +347,10 @@ export class Poller {
           figma.ui.postMessage({ type: "chat-available" });
         }
 
+        // Forward pending chat message count to UI for queue pill indicator
+        var pendingChat = (data.pendingChat as number) || 0;
+        figma.ui.postMessage({ type: "pending-chat", count: pendingChat });
+
         // Forward chat responses/chunks to UI
         var chatResponses = data.chatResponses as Array<{ id: string; message: string; isError?: boolean; _isChunk?: boolean; _done?: boolean }> | undefined;
         if (chatResponses && chatResponses.length > 0) {
@@ -372,7 +381,7 @@ export class Poller {
           // Keep-alive poll during execution so server doesn't think we disconnected
           var keepAliveTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
             httpRequest("GET", this.baseUrl + "/commands?keepalive=1", undefined, this.getHeaders(), 5000)
-              .catch(function() { /* best-effort keep-alive */ });
+              .catch(function(e) { console.warn("Keep-alive poll failed:", e); });
           }, 4000);
 
           try {
@@ -511,29 +520,43 @@ export class Poller {
     if (this.reconnecting) return;
     this.reconnecting = true;
 
-    console.log("Attempting reconnect...");
+    // Retry up to 3 times with exponential backoff before giving up
+    var maxRetries = 3;
+    var backoff = [1000, 3000, 5000];
 
-    try {
-      var success = await this.connect();
-      if (success) {
-        console.log("Reconnected successfully. Session: " + this.sessionId);
-        this.consecutiveErrors = 0;
-        if (this.onReconnect) {
-          this.onReconnect();
+    for (var attempt = 0; attempt < maxRetries; attempt++) {
+      console.log("Attempting reconnect... (attempt " + (attempt + 1) + "/" + maxRetries + ")");
+
+      try {
+        var success = await this.connect();
+        if (success) {
+          console.log("Reconnected successfully. Session: " + this.sessionId);
+          this.consecutiveErrors = 0;
+          if (this.onReconnect) {
+            this.onReconnect();
+          }
+          this.reconnecting = false;
+          return;
         }
-      } else {
-        console.warn("Reconnect failed, will retry on next poll");
-        figma.ui.postMessage({ type: "status", connected: false, transport: null });
-        if (this.onDisconnect) {
-          this.onDisconnect();
-        }
+      } catch (e) {
+        console.error("Reconnect error (attempt " + (attempt + 1) + "):", e);
       }
-    } catch (e) {
-      console.error("Reconnect error:", e);
-      figma.ui.postMessage({ type: "status", connected: false, transport: null });
-    } finally {
-      this.reconnecting = false;
+
+      // Wait before next retry (unless last attempt)
+      if (attempt < maxRetries - 1) {
+        console.log("Reconnect failed, retrying in " + backoff[attempt] + "ms...");
+        figma.ui.postMessage({ type: "status", connected: false, transport: null });
+        await new Promise(function(resolve) { setTimeout(resolve, backoff[attempt]); });
+      }
     }
+
+    // All retries exhausted — signal disconnect
+    console.warn("Reconnect failed after " + maxRetries + " attempts, disconnecting");
+    figma.ui.postMessage({ type: "status", connected: false, transport: null });
+    if (this.onDisconnect) {
+      this.onDisconnect();
+    }
+    this.reconnecting = false;
   }
 
   private getAdaptiveInterval(): number {

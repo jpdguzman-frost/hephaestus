@@ -200,7 +200,7 @@
   #chat-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 24px;
     padding: 14px 16px;
     background: #3B3634;
     border-bottom: 1px solid rgba(0,0,0,0.09);
@@ -220,10 +220,27 @@
     width: 61px;
   }
 
+  /* Queue badge in header — per Figma design */
+  #chat-queue-badge {
+    display: none;
+    padding: 6px 8px;
+    background: #F06800;
+    border-radius: 24px;
+    font-size: 8px;
+    font-weight: 700;
+    color: #DBD6D2;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  #chat-queue-badge.visible {
+    display: inline-flex;
+  }
+
   #chat-header-pill {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-left: auto;
     background: #1E1917;
     padding: 10px 14px;
     border-radius: 100px;
@@ -368,6 +385,16 @@
     color: #8C827A;
     line-height: 1.6;
     max-width: 252px;
+  }
+
+  /* Chat history divider */
+  .chat-history-divider {
+    text-align: center;
+    font-size: 10px;
+    color: #9B8D80;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    opacity: 0.6;
   }
 
   /* Node reference tag (inside bubble, own line) */
@@ -1189,6 +1216,7 @@
     </div>
     <div id="chat-header">
       <span id="chat-header-title"><svg width="61" height="24" viewBox="0 0 61 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 24V0H9.34246C11.0252 0 12.5112 0.289933 13.8006 0.869799C15.1118 1.44966 16.139 2.30873 16.882 3.44698C17.625 4.58524 17.9965 5.99195 17.9965 7.66711C17.9965 9.29933 17.6141 10.6953 16.8492 11.855C16.0843 12.9933 15.0572 13.8524 13.7678 14.4322L19.3405 24H13.6367L7.60509 13.4013L10.8831 15.302H5.08099V24H0ZM5.08099 10.953H9.37524C10.0964 10.953 10.7192 10.8134 11.2437 10.5342C11.7682 10.255 12.1725 9.86846 12.4566 9.3745C12.7626 8.88054 12.9155 8.31141 12.9155 7.66711C12.9155 7.00134 12.7626 6.42148 12.4566 5.92752C12.1725 5.43356 11.7682 5.04698 11.2437 4.76779C10.7192 4.48859 10.0964 4.34899 9.37524 4.34899H5.08099V10.953Z" fill="#F06800"/><path d="M21.8644 24V0H38.2874V4.34899H26.9454V9.79329H37.6318V14.1423H26.9454V19.651H38.2874V24H21.8644Z" fill="#F06800"/><path d="M39.3648 24L47.3633 11.9839L39.3648 0H45.1998L51.6248 9.6H48.7729L55.1651 0H61V0L53.0343 11.9839L61 24H55.1651L48.7729 14.3678L51.6248 14.4L45.1998 24H39.3648Z" fill="#F06800"/></svg></span>
+      <span id="chat-queue-badge"></span>
       <div id="chat-header-pill">
         <button id="pill-status-btn">Status</button>
         <span id="pill-talk-label">Talk</span>
@@ -1632,6 +1660,9 @@
       case "ws-disconnect":
         handleWsDisconnect();
         break;
+      case "chat-history":
+        renderChatHistory(msg.messages, msg.source);
+        break;
       case "chat-response":
         receiveChatResponse(msg);
         break;
@@ -1650,6 +1681,9 @@
         break;
       case "chat-unavailable":
         setChatAvailable(false);
+        break;
+      case "pending-chat":
+        updateChatQueuePill(msg.count || 0);
         break;
       case "selection-changed":
         handleSelectionChanged(msg);
@@ -1874,6 +1908,18 @@
 
   function setChatAvailable(available) {
     if (available) chatAvailable = true;
+  }
+
+  // Queue badge in header — per Figma design: orange pill next to REX logo
+  var chatQueueBadge = document.getElementById("chat-queue-badge");
+
+  function updateChatQueuePill(count) {
+    if (count > 0) {
+      chatQueueBadge.textContent = count + " on queue";
+      chatQueueBadge.classList.add("visible");
+    } else {
+      chatQueueBadge.classList.remove("visible");
+    }
   }
 
   function updateChatDisconnectedState() {
@@ -2121,12 +2167,114 @@
     return escaped;
   }
 
+  // ─── Chat History ──────────────────────────────────────────────────────
+
+  function showHistoryLoading() {
+    var existing = document.getElementById("chat-history-loading");
+    if (existing) return;
+    var el = document.createElement("div");
+    el.id = "chat-history-loading";
+    el.className = "chat-history-divider";
+    el.textContent = "Loading chat history...";
+    chatMessages.appendChild(el);
+  }
+
+  function hideHistoryLoading() {
+    var el = document.getElementById("chat-history-loading");
+    if (el) el.remove();
+  }
+
+  function renderChatHistory(messages, source) {
+    hideHistoryLoading();
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) return;
+
+    // Cache source: only render if chat area is empty (avoid flickering)
+    if (source === "cache" && chatMessages.children.length > 0) return;
+
+    // Remote source: authoritative — clear and re-render
+    if (source === "remote") {
+      // Remove only history messages and divider (keep live messages after divider)
+      var existingDivider = chatMessages.querySelector(".chat-history-divider");
+      if (existingDivider) {
+        // Remove everything before and including the divider
+        while (chatMessages.firstChild && chatMessages.firstChild !== existingDivider) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+        if (existingDivider.parentNode) existingDivider.remove();
+      } else {
+        // No divider yet — first load, clear everything
+        chatMessages.innerHTML = "";
+      }
+    }
+
+    // Render history messages (insert at the beginning, before live messages)
+    var fragment = document.createDocumentFragment();
+    for (var i = 0; i < messages.length; i++) {
+      var entry = messages[i];
+      var div = document.createElement("div");
+      div.className = "chat-msg " + (entry.role || "user");
+
+      if (entry.role === "assistant") {
+        var labelEl = document.createElement("div");
+        labelEl.className = "msg-label";
+        labelEl.textContent = "Rex answered";
+        div.appendChild(labelEl);
+        var contentEl = document.createElement("div");
+        contentEl.className = "msg-content";
+        contentEl.innerHTML = renderMarkdown(entry.message || "");
+        div.appendChild(contentEl);
+      } else {
+        div.textContent = entry.message || "";
+      }
+      fragment.appendChild(div);
+    }
+
+    // Add divider
+    var divider = document.createElement("div");
+    divider.className = "chat-history-divider";
+    divider.textContent = "Previous messages";
+    fragment.appendChild(divider);
+
+    // Insert before existing live messages
+    if (chatMessages.firstChild) {
+      chatMessages.insertBefore(fragment, chatMessages.firstChild);
+    } else {
+      chatMessages.appendChild(fragment);
+    }
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  // Debounced cache writer — saves last 20 messages to clientStorage
+  var cacheDebounceTimer = null;
+  function scheduleCacheUpdate() {
+    if (cacheDebounceTimer) clearTimeout(cacheDebounceTimer);
+    cacheDebounceTimer = setTimeout(function() {
+      var msgs = chatMessages.querySelectorAll(".chat-msg");
+      var entries = [];
+      var startIdx = Math.max(0, msgs.length - 20);
+      for (var i = startIdx; i < msgs.length; i++) {
+        var el = msgs[i];
+        var role = el.classList.contains("user") ? "user" :
+                   el.classList.contains("error") ? "error" : "assistant";
+        // Use data-raw attribute to preserve original markdown
+        var text = el.getAttribute("data-raw") || el.textContent || "";
+        entries.push({ role: role, message: text, timestamp: Date.now() });
+      }
+      if (entries.length > 0) {
+        parent.postMessage({ pluginMessage: { type: "cache-chat-history", messages: entries } }, "*");
+      }
+    }, 2000);
+  }
+
   function appendChatMessage(role, text, selectionInfo) {
     hasMessages = true;
     updateChatDisconnectedState();
 
     var div = document.createElement("div");
     div.className = "chat-msg " + role;
+    div.setAttribute("data-raw", text); // Preserve original text for cache
 
     if (role === "assistant") {
       var labelEl = document.createElement("div");
@@ -2162,6 +2310,7 @@
 
     chatMessages.appendChild(div);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    scheduleCacheUpdate();
   }
 
   var seenResponseIds = {};    // dedup for complete chat-response messages
@@ -2244,8 +2393,10 @@
       // Switch label from streaming to answered
       stream.label.className = "msg-label";
       stream.label.textContent = "Rex answered";
+      stream.div.setAttribute("data-raw", stream.text); // Preserve full markdown for cache
       completedStreamIds[data.id] = true;
       delete streamingMessages[data.id];
+      scheduleCacheUpdate();
     }
   }
 
@@ -2376,6 +2527,8 @@
     currentPort = channel;
     resetReconnectBtn();
     resizeForCurrentMode();
+    // Show loading indicator while chat history is fetched
+    showHistoryLoading();
   }
 
   function showDisconnectedOverlay(channel) {

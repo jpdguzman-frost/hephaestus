@@ -7,6 +7,7 @@ import type {
   MemoryCategory,
   MemorySource,
   MemoryContext,
+  ChatHistoryEntry,
 } from "./types.js";
 import type { Logger } from "../shared/logger.js";
 
@@ -172,6 +173,60 @@ export class MemoryServiceClient {
   async applyDecay(): Promise<number> {
     const resp = await this.post("/api/memories/decay", {});
     return (resp.modified as number) ?? 0;
+  }
+
+  // ─── Chat History ─────────────────────────────────────────────────────────
+
+  /**
+   * Persist a chat message to the memory service. Fire-and-forget — caller
+   * should not await this and should catch errors.
+   */
+  async saveChatMessage(entry: ChatHistoryEntry, context: MemoryContext): Promise<void> {
+    const connected = await this.ensureConnected();
+    if (!connected) return;
+
+    const truncatedMessage = entry.message.length > 2000
+      ? entry.message.slice(0, 2000)
+      : entry.message;
+
+    await this.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify({ ...entry, message: truncatedMessage }),
+      tags: ["chat-history", entry.role],
+      source: "explicit",
+      context,
+    });
+  }
+
+  /**
+   * Retrieve chat history for a file, sorted by timestamp ascending.
+   */
+  async getChatHistory(context: MemoryContext, limit: number = 20): Promise<ChatHistoryEntry[]> {
+    const connected = await this.ensureConnected();
+    if (!connected) return [];
+
+    const entries = await this.recall({
+      query: "chat-history",
+      scope: "file",
+      category: "context",
+      context,
+      limit: limit * 2, // Over-fetch to account for non-chat entries
+    });
+
+    const chatEntries: ChatHistoryEntry[] = [];
+    for (const entry of entries) {
+      if (!entry.tags?.includes("chat-history")) continue;
+      try {
+        const parsed = JSON.parse(entry.content) as ChatHistoryEntry;
+        chatEntries.push(parsed);
+      } catch {
+        // Skip malformed entries
+      }
+    }
+
+    chatEntries.sort((a, b) => a.timestamp - b.timestamp);
+    return chatEntries.slice(-limit);
   }
 
   // ─── HTTP Helpers ──────────────────────────────────────────────────────────

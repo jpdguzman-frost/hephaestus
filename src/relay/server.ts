@@ -16,7 +16,7 @@ import { HeartbeatMonitor } from "./heartbeat.js";
 import { CommentWatcher } from "./comment-watcher.js";
 import { MemoryServiceClient } from "../memory/client.js";
 import { loadMemoryConfig } from "../memory/config.js";
-import type { MemoryConfig } from "../memory/types.js";
+import type { MemoryConfig, ChatHistoryEntry, MemoryContext } from "../memory/types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +71,9 @@ export class RelayServer {
   // Memory system
   private readonly memoryConfig: MemoryConfig;
   private _memoryStore: MemoryServiceClient | null = null;
+
+  // Stream accumulator for persisting complete streaming responses
+  private streamAccumulator: Map<string, string> = new Map();
 
   /** Access the memory store (null if disabled/not connected). */
   get memoryStore(): MemoryServiceClient | null {
@@ -249,6 +252,7 @@ export class RelayServer {
     this.chatWaiters = [];
     this.chatInbox = [];
     this.chatOutbox = [];
+    this.streamAccumulator.clear();
 
     // Clean up components
     this.commentWatcher.stop();
@@ -323,6 +327,16 @@ export class RelayServer {
    * If a waiter exists, it consumes from the queue immediately.
    */
   enqueueChatMessage(msg: { id: string; message: string; selection: unknown[]; timestamp: number }): void {
+    // Persist to remote history (fire-and-forget)
+    this.persistChatMessage({
+      id: msg.id,
+      role: "user",
+      message: msg.message,
+      timestamp: msg.timestamp,
+      fileKey: this.connection.session?.fileKey ?? "",
+      selection: msg.selection as Array<{ id: string; name: string; type: string }>,
+    });
+
     // If a waiter exists, deliver directly — skip the queue
     const waiter = this.chatWaiters.shift();
     if (waiter) {
@@ -342,6 +356,24 @@ export class RelayServer {
   /** Number of pending chat messages in the inbox. */
   get pendingChatCount(): number {
     return this.chatInbox.length;
+  }
+
+  /** Persist a chat message to the remote memory service (fire-and-forget). */
+  private persistChatMessage(entry: ChatHistoryEntry): void {
+    if (!this._memoryStore || !this.connection.session) return;
+    const session = this.connection.session;
+    const ctx: MemoryContext = {
+      fileKey: session.fileKey,
+      fileName: session.fileName,
+      userId: session.user?.id,
+      userName: session.user?.name,
+    };
+    this._memoryStore.saveChatMessage(entry, ctx).catch((err) => {
+      this.logger.warn("Failed to persist chat message", {
+        id: entry.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 
   /**
@@ -373,6 +405,17 @@ export class RelayServer {
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
   sendChatResponse(response: { id: string; message: string; timestamp: number; isError?: boolean }): void {
+    // Persist non-error responses to remote history (fire-and-forget)
+    if (!response.isError) {
+      this.persistChatMessage({
+        id: response.id,
+        role: "assistant",
+        message: response.message,
+        timestamp: response.timestamp,
+        fileKey: this.connection.session?.fileKey ?? "",
+      });
+    }
+
     // ALWAYS queue for HTTP polling — this is the reliable baseline.
     // WebSocket is an optional fast path but can silently fail.
     if (this.chatOutbox.length >= this.CHAT_OUTBOX_MAX) {
@@ -406,6 +449,21 @@ export class RelayServer {
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
   sendChatChunk(chunk: { id: string; delta: string; done: boolean; timestamp: number }): void {
+    // Accumulate streaming deltas for history persistence
+    const acc = this.streamAccumulator.get(chunk.id) ?? "";
+    this.streamAccumulator.set(chunk.id, acc + chunk.delta);
+    if (chunk.done) {
+      const fullText = this.streamAccumulator.get(chunk.id) ?? "";
+      this.streamAccumulator.delete(chunk.id);
+      this.persistChatMessage({
+        id: chunk.id,
+        role: "assistant",
+        message: fullText,
+        timestamp: chunk.timestamp,
+        fileKey: this.connection.session?.fileKey ?? "",
+      });
+    }
+
     const wsOpen = this.wsClient?.readyState === WebSocket.OPEN;
 
     // Prefer WebSocket for chunks (real-time delivery). Fall back to HTTP
@@ -551,6 +609,30 @@ export class RelayServer {
       }
       return { responses };
     });
+
+    // GET /chat/history — plugin fetches persisted chat history on connect
+    app.get("/chat/history", {
+      preHandler: authHook,
+    }, async (_req: FastifyRequest, _reply: FastifyReply) => {
+      if (!this._memoryStore || !this.connection.session) {
+        return { messages: [] };
+      }
+      try {
+        const ctx: MemoryContext = {
+          fileKey: this.connection.session.fileKey,
+          fileName: this.connection.session.fileName,
+          userId: this.connection.session.user?.id,
+          userName: this.connection.session.user?.name,
+        };
+        const messages = await this._memoryStore.getChatHistory(ctx, 20);
+        return { messages };
+      } catch (err) {
+        this.logger.warn("Failed to fetch chat history", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return { messages: [] };
+      }
+    });
   }
 
   // ─── Route Handlers ────────────────────────────────────────────────────
@@ -659,7 +741,7 @@ export class RelayServer {
       // Even with no commands, signal activity state so the plugin
       // can show forging animation when Claude is working
       if (this.isActive || chatResponses.length > 0 || this.pendingChatCount > 0) {
-        return { commands: [], activity: this.isActive, chatResponses };
+        return { commands: [], activity: this.isActive, chatResponses, pendingChat: this.pendingChatCount };
       }
       reply.code(204);
       return undefined;
@@ -691,6 +773,7 @@ export class RelayServer {
       pollingInterval: suggestedInterval,
       activity: this.isActive,
       chatResponses,
+      pendingChat: this.pendingChatCount,
       queueDepth: remainingStats.pending + remainingStats.inFlight,
     };
   }

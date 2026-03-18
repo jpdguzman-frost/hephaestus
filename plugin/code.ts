@@ -177,6 +177,11 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       figma.ui.resize(message.width as number, message.height as number);
       return;
     }
+    if (message && message.type === "cache-chat-history") {
+      var cacheKey = "rex-chat-history-" + (figma.fileKey || "unknown");
+      figma.clientStorage.setAsync(cacheKey, message.messages).catch(function() {});
+      return;
+    }
     if (message && message.type === "navigate-to-node") {
       var nodeId = message.nodeId as string;
       if (nodeId) {
@@ -202,6 +207,9 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
     await poller.startPolling();
     figma.ui.postMessage({ type: "channel-connected", channel: channel });
     reportStatus("http", channel);
+
+    // Load chat history (two-phase: local cache then remote)
+    loadChatHistory(poller).catch(function(e) { console.warn("Chat history load failed:", e); });
 
     var sessionId = poller.getSessionId();
     if (sessionId) ws.setSessionId(sessionId);
@@ -252,6 +260,38 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       type: "channel-error",
       message: "Connected to channel " + channel + " but the handshake failed. Try again?",
     });
+  }
+}
+
+// ─── Chat History ─────────────────────────────────────────────────────
+
+async function loadChatHistory(poller: Poller): Promise<void> {
+  var fileKey = figma.fileKey || "unknown";
+  var cacheKey = "rex-chat-history-" + fileKey;
+
+  // Phase 1: Load local cache for instant rendering
+  try {
+    var cached = await figma.clientStorage.getAsync(cacheKey);
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      figma.ui.postMessage({ type: "chat-history", messages: cached, source: "cache" });
+    }
+  } catch (e) { /* ignore */ }
+
+  // Phase 2: Fetch remote history (non-blocking, replaces cache)
+  try {
+    var resp = await poller.getAuthenticated("/chat/history");
+    if (resp.status >= 200 && resp.status < 300 && resp.body) {
+      var data = JSON.parse(resp.body);
+      if (data.messages && data.messages.length > 0) {
+        figma.ui.postMessage({ type: "chat-history", messages: data.messages, source: "remote" });
+        // Update local cache with remote data
+        try {
+          await figma.clientStorage.setAsync(cacheKey, data.messages.slice(-20));
+        } catch (e) { /* non-critical */ }
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to load remote chat history:", e);
   }
 }
 

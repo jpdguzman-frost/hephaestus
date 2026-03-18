@@ -56,6 +56,16 @@ export interface MemoryConfig {
   cleanupIntervalHours: number;
 }
 
+/** A single chat message persisted for history. */
+export interface ChatHistoryEntry {
+  id: string;
+  role: "user" | "assistant";
+  message: string;
+  timestamp: number;
+  fileKey: string;
+  selection?: Array<{ id: string; name: string; type: string }>;
+}
+
 /** Context passed to memory operations from the active session. */
 export interface MemoryContext {
   userId?: string;

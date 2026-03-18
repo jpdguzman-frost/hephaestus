@@ -2763,6 +2763,11 @@
 
       row.addEventListener("click", (function(sid) {
         return function() {
+          // Immediately switch to chat with loading indicator
+          hideSessionPicker();
+          chatMessages.innerHTML = "";
+          showHistoryLoading();
+          switchToChat();
           parent.postMessage({ pluginMessage: { type: "session-select", sessionId: sid } }, "*");
         };
       })(s.sessionId));
@@ -2785,17 +2790,34 @@
 
     if (source === "cache") {
       // Phase 1: instant render from cache — only if chat is empty
-      if (chatMessages.children.length === 0 && messages && messages.length > 0) {
-        renderChatHistory(messages, "cache");
+      if (chatMessages.children.length === 0) {
+        if (messages && messages.length > 0) {
+          renderChatHistory(messages, "cache");
+        } else {
+          // No cache — show loading while waiting for remote
+          showHistoryLoading();
+        }
       }
+      switchToChat();
     } else {
       // Phase 2: remote (authoritative) — clear and re-render
-      chatMessages.innerHTML = "";
+      hideHistoryLoading();
+      // Remove only history content (keep live messages if any)
+      var existingDivider = chatMessages.querySelector(".chat-history-divider");
+      if (existingDivider) {
+        while (chatMessages.firstChild && chatMessages.firstChild !== existingDivider) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+        if (existingDivider.parentNode) existingDivider.remove();
+      } else if (chatMessages.children.length === 0 || chatMessages.querySelector("#chat-history-loading")) {
+        chatMessages.innerHTML = "";
+      }
       if (messages && messages.length > 0) {
         renderChatHistory(messages, "remote");
       }
+      // Only switch to chat if not already there (cache may have done it)
+      if (!isChatMode) switchToChat();
     }
-    switchToChat();
   }
 
   newSessionBtn.addEventListener("click", function() {

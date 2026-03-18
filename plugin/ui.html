@@ -1041,6 +1041,51 @@
     opacity: 0.6;
   }
 
+  /* ─── Session History ─── */
+  #session-history {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    background: #3B3634;
+  }
+
+  #sh-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    background: #3B3634;
+    border-bottom: 1px solid rgba(0,0,0,0.09);
+    flex-shrink: 0;
+    justify-content: space-between;
+  }
+
+  #sh-header .sp-logo {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: #F06800;
+  }
+
+  #sh-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .sh-date-label {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: #8C827A;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .sh-date-group {
+    margin-bottom: 16px;
+  }
+
   /* ─── Channel Input Screen ─── */
   #channel-screen {
     display: none;
@@ -1399,6 +1444,18 @@
       <button id="reconnect-btn">Reconnect</button>
       <button id="change-channel-btn">Change channel</button>
     </div>
+  </div>
+
+  <div id="session-history" style="display:none;">
+    <div id="sh-header">
+      <span class="sp-logo">REX</span>
+      <div class="sp-pills">
+        <span class="sp-pill" id="sh-pill-status">Status</span>
+        <span class="sp-pill" id="sh-pill-talk">Talk</span>
+        <span class="sp-pill active" id="sh-pill-sessions">Sessions</span>
+      </div>
+    </div>
+    <div id="sh-content"></div>
   </div>
 
   <div id="session-picker" style="display:none;">
@@ -1911,6 +1968,10 @@
         break;
       case "session-list":
         renderSessionList(msg.sessions);
+        // Also update session history if it's visible
+        if (sessionHistoryEl.style.display === "flex") {
+          renderSessionHistory(msg.sessions);
+        }
         break;
       case "session-created":
         onSessionCreated(msg.session);
@@ -2210,6 +2271,7 @@
   function switchToChat() {
     isChatMode = true;
     sessionPickerEl.style.display = "none";
+    sessionHistoryEl.style.display = "none";
     statusContainer.style.display = "none";
     statusContainer.classList.add("hidden");
     chatContainer.classList.add("active");
@@ -2223,6 +2285,7 @@
     isChatMode = false;
     chatContainer.classList.remove("active");
     sessionPickerEl.style.display = "none";
+    sessionHistoryEl.style.display = "none";
     statusContainer.style.display = "flex";
     statusContainer.classList.remove("hidden");
     parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
@@ -2241,7 +2304,7 @@
 
   var pillSessionsBtn = document.getElementById("pill-sessions-btn");
   pillSessionsBtn.addEventListener("click", function() {
-    showSessionPicker();
+    showSessionHistory();
   });
 
   // Auto-resize textarea
@@ -2835,6 +2898,139 @@
     sessionPickerEl.style.display = "none";
   }
 
+  // ─── Session History View ────────────────────────────────────────────────
+
+  var sessionHistoryEl = document.getElementById("session-history");
+  var shContent = document.getElementById("sh-content");
+
+  function showSessionHistory() {
+    channelScreen.style.display = "none";
+    channelDisconnected.style.display = "none";
+    statusContainer.style.display = "none";
+    statusContainer.classList.add("hidden");
+    sessionPickerEl.style.display = "none";
+    if (chatContainer) chatContainer.classList.remove("active");
+    sessionHistoryEl.style.display = "flex";
+    isChatMode = false;
+    // Fetch all sessions
+    parent.postMessage({ pluginMessage: { type: "fetch-sessions" } }, "*");
+    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
+  }
+
+  function hideSessionHistory() {
+    sessionHistoryEl.style.display = "none";
+  }
+
+  function getDateGroup(timestamp) {
+    var now = new Date();
+    var d = new Date(timestamp);
+    if (now.toDateString() === d.toDateString()) return "TODAY";
+    var yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.toDateString() === d.toDateString()) return "YESTERDAY";
+    var months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    return months[d.getMonth()] + " " + d.getDate();
+  }
+
+  function renderSessionHistory(sessions) {
+    shContent.innerHTML = "";
+    if (!sessions || sessions.length === 0) {
+      var empty = document.createElement("div");
+      empty.id = "session-empty";
+      empty.textContent = "No sessions yet.";
+      shContent.appendChild(empty);
+      return;
+    }
+
+    // Group sessions by date
+    var groups = {};
+    var groupOrder = [];
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i];
+      var group = getDateGroup(s.lastMessageAt || s.createdAt);
+      if (!groups[group]) {
+        groups[group] = [];
+        groupOrder.push(group);
+      }
+      groups[group].push(s);
+    }
+
+    // Render each date group
+    for (var g = 0; g < groupOrder.length; g++) {
+      var groupName = groupOrder[g];
+      var groupSessions = groups[groupName];
+
+      var dateGroup = document.createElement("div");
+      dateGroup.className = "sh-date-group";
+
+      var dateLabel = document.createElement("div");
+      dateLabel.className = "sh-date-label";
+      dateLabel.textContent = groupName;
+      dateGroup.appendChild(dateLabel);
+
+      for (var j = 0; j < groupSessions.length; j++) {
+        var sess = groupSessions[j];
+
+        if (j > 0) {
+          var divider = document.createElement("div");
+          divider.className = "session-divider";
+          dateGroup.appendChild(divider);
+        }
+
+        var row = document.createElement("div");
+        row.className = "session-row";
+        row.setAttribute("data-session-id", sess.sessionId);
+
+        var top = document.createElement("div");
+        top.className = "session-row-top";
+
+        var name = document.createElement("div");
+        name.className = "session-row-name";
+        name.textContent = sess.name || "Untitled Session";
+        top.appendChild(name);
+
+        var time = document.createElement("div");
+        time.className = "session-row-time";
+        time.textContent = formatSessionTime(sess.lastMessageAt || sess.createdAt);
+        top.appendChild(time);
+
+        row.appendChild(top);
+
+        if (sess.summary) {
+          var summary = document.createElement("div");
+          summary.className = "session-row-summary";
+          summary.textContent = sess.summary;
+          row.appendChild(summary);
+        }
+
+        row.addEventListener("click", (function(sid) {
+          return function() {
+            hideSessionHistory();
+            chatMessages.innerHTML = "";
+            showHistoryLoading();
+            switchToChat();
+            parent.postMessage({ pluginMessage: { type: "session-select", sessionId: sid } }, "*");
+          };
+        })(sess.sessionId));
+
+        dateGroup.appendChild(row);
+      }
+
+      shContent.appendChild(dateGroup);
+    }
+  }
+
+  // Session history header pill handlers
+  document.getElementById("sh-pill-status").addEventListener("click", function() {
+    hideSessionHistory();
+    switchToStatus();
+  });
+  document.getElementById("sh-pill-talk").addEventListener("click", function() {
+    hideSessionHistory();
+    showSessionPicker();
+  });
+  // sh-pill-sessions — already on this view, no action
+
   function formatSessionTime(timestamp) {
     var now = new Date();
     var d = new Date(timestamp);
@@ -2987,13 +3183,13 @@
     }
     // Otherwise stay in picker — user needs to pick a session first
   });
-  // Sessions pill — show all sessions
+  // Sessions pill → go to Session History view
   document.getElementById("sp-pill-history").addEventListener("click", function() {
-    renderSessionList(null, true);
+    showSessionHistory();
   });
-  // "View previous conversations" — show all sessions
+  // "View previous conversations" → go to Session History view
   document.getElementById("sp-view-all").addEventListener("click", function() {
-    renderSessionList(null, true);
+    showSessionHistory();
   });
 
   function showDisconnectedOverlay(channel) {

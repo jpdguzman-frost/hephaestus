@@ -287,6 +287,20 @@
     color: rgba(255,255,255,0.8);
   }
 
+  #pill-sessions-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-weight: 700;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  #pill-sessions-btn:hover {
+    color: rgba(255,255,255,0.8);
+  }
+
   #pill-talk-label {
     color: #F27B21;
     font-weight: 700;
@@ -1442,6 +1456,7 @@
       <div id="chat-header-pill">
         <button id="pill-status-btn">Status</button>
         <span id="pill-talk-label">Talk</span>
+        <button id="pill-sessions-btn">Sessions</button>
       </div>
     </div>
     <div id="chat-session-bar">
@@ -2223,6 +2238,11 @@
 
   // Header pill "Status" button → switch to status
   pillStatusBtn.addEventListener("click", switchToStatus);
+
+  var pillSessionsBtn = document.getElementById("pill-sessions-btn");
+  pillSessionsBtn.addEventListener("click", function() {
+    showSessionPicker();
+  });
 
   // Auto-resize textarea
   chatInput.addEventListener("input", function() {

@@ -2333,6 +2333,9 @@
     el.className = "chat-history-divider";
     el.textContent = "Loading chat history...";
     chatMessages.appendChild(el);
+    // Mark as having messages so the empty state doesn't cover the loading indicator
+    hasMessages = true;
+    updateChatDisconnectedState();
   }
 
   function hideHistoryLoading() {

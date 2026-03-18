@@ -445,7 +445,7 @@ async function handleWaitForChat(
   }
 
   const pending = context.relay.pendingChatCount;
-  return {
+  const result: Record<string, unknown> = {
     status: "received",
     id: msg.id,
     message: msg.message,
@@ -456,6 +456,13 @@ async function handleWaitForChat(
       ? `${pending} more message(s) queued. Call wait_for_chat again immediately to retrieve the next one.`
       : "After processing this message and sending a response with send_chat_response, call wait_for_chat again to listen for the next message.",
   };
+
+  // Prompt Claude to name unnamed sessions
+  if (context.relay.activeChatSessionName === "New Session") {
+    result._sessionHint = "This is a new unnamed session. When you respond with send_chat_response, include a sessionName parameter (2-5 words, no quotes) that describes the topic of this conversation.";
+  }
+
+  return result;
 }
 
 async function handleSendChatResponse(
@@ -465,6 +472,11 @@ async function handleSendChatResponse(
   const messageId = params["messageId"] as string;
   const message = params["message"] as string;
   const isError = (params["isError"] as boolean | undefined) ?? false;
+
+  const sessionName = params["sessionName"] as string | undefined;
+  if (sessionName) {
+    context.relay.updateChatSessionName(sessionName);
+  }
 
   context.relay.sendChatResponse({
     id: messageId,

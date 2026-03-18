@@ -843,6 +843,7 @@ export const sendChatResponseSchema = z.object({
   messageId: z.string(),
   message: z.string(),
   isError: z.boolean().optional(),
+  sessionName: z.string().max(60).optional(),
 });
 
 /** send_chat_chunk — send a streaming chunk to the plugin chat */

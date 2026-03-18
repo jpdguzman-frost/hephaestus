@@ -88,6 +88,29 @@ export class RelayServer {
     return this._activeChatSession?.name ?? null;
   }
 
+  /** Update the active session's name (called when Claude names a session). */
+  updateChatSessionName(name: string): void {
+    if (!this._activeChatSession) return;
+    this._activeChatSession.name = name;
+    this.logger.info("Chat session renamed", { sessionId: this._activeChatSession.sessionId, name });
+
+    // Persist immediately
+    if (this._memoryStore && this.connection.session) {
+      const pluginSession = this.connection.session;
+      const ctx: MemoryContext = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name,
+      };
+      this._memoryStore.updateSession(this._activeChatSession, ctx).catch((err) => {
+        this.logger.warn("Failed to persist session name", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+  }
+
   /** Access the memory store (null if disabled/not connected). */
   get memoryStore(): MemoryServiceClient | null {
     return this._memoryStore;

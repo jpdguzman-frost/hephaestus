@@ -876,6 +876,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     padding: 32px;
     overflow: hidden;
   }
@@ -893,10 +894,6 @@
 
   #sp-sessions-block {
     width: 100%;
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    margin-bottom: 16px;
   }
 
   #new-session-btn {
@@ -2821,7 +2818,8 @@
       sessionListEl.appendChild(empty);
       return;
     }
-    for (var i = 0; i < sessions.length; i++) {
+    var maxItems = Math.min(sessions.length, 3);
+    for (var i = 0; i < maxItems; i++) {
       var s = sessions[i];
       if (i > 0) {
         var divider = document.createElement("div");

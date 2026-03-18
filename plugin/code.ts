@@ -233,6 +233,16 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
     // Status screen shows automatically via showConnectedUI.
     // Session picker is triggered when user clicks "Talk Now".
 
+    // Resume last active session so messages sent before user selects a session are still tagged
+    try {
+      var fileKey = figma.fileKey || "unknown";
+      var lastSessionId = await figma.clientStorage.getAsync("rex-active-session-" + fileKey) as string | null;
+      if (lastSessionId) {
+        currentSessionId = lastSessionId;
+        poller.postAuthenticated("/session/resume", { sessionId: lastSessionId }).catch(function() {});
+      }
+    } catch (e) { /* ignore */ }
+
     var sessionId = poller.getSessionId();
     if (sessionId) ws.setSessionId(sessionId);
     var token = poller.getAuthToken();
@@ -312,6 +322,8 @@ async function handleSessionCreate(): Promise<void> {
       if (session) {
         currentSessionId = session.sessionId;
         currentSessionName = session.name;
+        // Persist active sessionId for resume after MCP restart
+        figma.clientStorage.setAsync("rex-active-session-" + (figma.fileKey || "unknown"), session.sessionId).catch(function() {});
         figma.ui.postMessage({ type: "session-created", session: session });
       }
     }
@@ -351,6 +363,8 @@ async function handleSessionSelect(sessionId: string): Promise<void> {
       var data = JSON.parse(resp.body);
       currentSessionId = sessionId;
       currentSessionName = data.sessionName || "Session";
+      // Persist active sessionId for resume after MCP restart
+      figma.clientStorage.setAsync("rex-active-session-" + (figma.fileKey || "unknown"), sessionId).catch(function() {});
       var messages = data.messages || [];
       figma.ui.postMessage({
         type: "session-selected",

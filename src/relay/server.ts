@@ -818,6 +818,53 @@ export class RelayServer {
       }
     });
 
+    // POST /session/resume — restore active session after server restart
+    app.post("/session/resume", {
+      preHandler: authHook,
+    }, async (req: FastifyRequest, _reply: FastifyReply) => {
+      const body = req.body as { sessionId?: string } | null;
+      const pluginSession = this.connection.session;
+      if (!body?.sessionId || !pluginSession) {
+        return { status: "no-op" };
+      }
+      // Already have an active session — no need to resume
+      if (this._activeChatSession) {
+        return { status: "already-active", sessionId: this._activeChatSession.sessionId };
+      }
+      const ctx: MemoryContext = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name,
+      };
+      // Try to find the session in memory service
+      if (this._memoryStore) {
+        try {
+          const sessions = await this._memoryStore.listSessions(ctx, 50);
+          const found = sessions.find(s => s.sessionId === body.sessionId);
+          if (found) {
+            this._activeChatSession = found;
+            this.logger.info("Chat session resumed", { sessionId: found.sessionId, name: found.name });
+            return { status: "resumed", sessionId: found.sessionId, name: found.name };
+          }
+        } catch {
+          // Fall through to minimal session
+        }
+      }
+      // Fallback: create minimal session object
+      this._activeChatSession = {
+        sessionId: body.sessionId,
+        name: "Resumed Session",
+        summary: "",
+        fileKey: pluginSession.fileKey,
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        messageCount: 0,
+      };
+      this.logger.info("Chat session resumed (minimal)", { sessionId: body.sessionId });
+      return { status: "resumed", sessionId: body.sessionId };
+    });
+
     // POST /session/delete — delete a session and its messages
     app.post("/session/delete", {
       preHandler: authHook,

@@ -876,11 +876,8 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
     padding: 32px;
     overflow: hidden;
-    min-height: 0;
   }
 
   #sp-idle-text {
@@ -891,6 +888,7 @@
     text-align: center;
     line-height: 1.6;
     flex-shrink: 0;
+    margin-bottom: 16px;
   }
 
   #sp-sessions-block {
@@ -898,6 +896,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    margin-bottom: 16px;
   }
 
   #new-session-btn {
@@ -2781,7 +2780,7 @@
     sessionPickerEl.style.display = "flex";
     // Set idle text
     spIdleText.textContent = idlePhrases[Math.floor(Math.random() * idlePhrases.length)];
-    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 560 } }, "*");
+    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
   }
 
   function hideSessionPicker() {

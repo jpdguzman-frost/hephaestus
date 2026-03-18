@@ -408,17 +408,21 @@ export class RelayServer {
       });
     });
 
-    // Update session metadata (summary, messageCount, lastMessageAt)
-    if (chatSession && this._memoryStore) {
+    // Update session metadata in memory (summary, messageCount, lastMessageAt)
+    if (chatSession) {
       chatSession.messageCount++;
       chatSession.lastMessageAt = entry.timestamp;
       chatSession.summary = entry.message.slice(0, 100);
-      this._memoryStore.updateSession(chatSession, ctx).catch((err) => {
-        this.logger.warn("Failed to update chat session", {
-          sessionId: chatSession.sessionId,
-          error: err instanceof Error ? err.message : String(err),
+
+      // Persist session metadata every 5 messages to avoid flooding the memory service
+      if (this._memoryStore && chatSession.messageCount % 5 === 0) {
+        this._memoryStore.updateSession(chatSession, ctx).catch((err) => {
+          this.logger.warn("Failed to update chat session", {
+            sessionId: chatSession.sessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
-      });
+      }
     }
   }
 

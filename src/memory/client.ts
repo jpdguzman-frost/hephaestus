@@ -253,19 +253,24 @@ export class MemoryServiceClient {
     if (!connected) return [];
 
     // Use list and filter by chat-session tag client-side
-    const entries = await this.list(context, "file", "context", limit * 3);
+    const entries = await this.list(context, "file", "context", limit * 5);
 
-    const sessions: ChatSession[] = [];
+    // Deduplicate by sessionId — pick the entry with the latest lastMessageAt
+    const sessionMap = new Map<string, ChatSession>();
     for (const entry of entries) {
       if (!entry.tags?.includes("chat-session")) continue;
       try {
         const parsed = JSON.parse(entry.content) as ChatSession;
-        sessions.push(parsed);
+        const existing = sessionMap.get(parsed.sessionId);
+        if (!existing || parsed.lastMessageAt > existing.lastMessageAt) {
+          sessionMap.set(parsed.sessionId, parsed);
+        }
       } catch {
         // Skip malformed entries
       }
     }
 
+    const sessions = Array.from(sessionMap.values());
     sessions.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
     return sessions.slice(0, limit);
   }
@@ -275,13 +280,9 @@ export class MemoryServiceClient {
     const connected = await this.ensureConnected();
     if (!connected) return;
 
-    // Remove old entry by sessionId tag, then store updated one
-    try {
-      await this.forget(context, undefined, session.sessionId, "file");
-    } catch {
-      // Old entry may not exist yet — ignore
-    }
-
+    // Just store an updated entry — don't use forget() as it would also
+    // delete chat-message entries that contain the sessionId in their content.
+    // When listing sessions, we deduplicate by sessionId and pick the latest.
     await this.remember({
       scope: "file",
       category: "context",

@@ -2107,6 +2107,8 @@
 
   function switchToChat() {
     isChatMode = true;
+    sessionPickerEl.style.display = "none";
+    statusContainer.style.display = "none";
     statusContainer.classList.add("hidden");
     chatContainer.classList.add("active");
     updateChatDisconnectedState();
@@ -2118,6 +2120,8 @@
   function switchToStatus() {
     isChatMode = false;
     chatContainer.classList.remove("active");
+    sessionPickerEl.style.display = "none";
+    statusContainer.style.display = "flex";
     statusContainer.classList.remove("hidden");
     parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
   }

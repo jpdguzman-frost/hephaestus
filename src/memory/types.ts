@@ -56,6 +56,17 @@ export interface MemoryConfig {
   cleanupIntervalHours: number;
 }
 
+/** A chat session grouping messages together. */
+export interface ChatSession {
+  sessionId: string;
+  name: string;
+  summary: string;
+  fileKey: string;
+  createdAt: number;
+  lastMessageAt: number;
+  messageCount: number;
+}
+
 /** A single chat message persisted for history. */
 export interface ChatHistoryEntry {
   id: string;
@@ -63,6 +74,7 @@ export interface ChatHistoryEntry {
   message: string;
   timestamp: number;
   fileKey: string;
+  sessionId?: string;
   selection?: Array<{ id: string; name: string; type: string }>;
 }
 

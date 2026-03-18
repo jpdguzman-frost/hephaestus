@@ -413,6 +413,13 @@ async function handleGetStatus(
       pendingMessages: pendingChat,
       hasMessages: pendingChat > 0,
     },
+    session: {
+      id: context.relay.activeChatSessionId,
+      name: context.relay.activeChatSessionName,
+      _hint: context.relay.activeChatSessionId
+        ? "Active chat session. History is loaded as context."
+        : "No active chat session.",
+    },
     uptime: Math.floor(healthMetrics.connection.uptime / 1000),
   };
 }

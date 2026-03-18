@@ -8,6 +8,7 @@ import type {
   MemorySource,
   MemoryContext,
   ChatHistoryEntry,
+  ChatSession,
 } from "./types.js";
 import type { Logger } from "../shared/logger.js";
 
@@ -227,6 +228,92 @@ export class MemoryServiceClient {
 
     chatEntries.sort((a, b) => a.timestamp - b.timestamp);
     return chatEntries.slice(-limit);
+  }
+
+  // ─── Chat Sessions ──────────────────────────────────────────────────────────
+
+  /** Create a new chat session. */
+  async createSession(session: ChatSession, context: MemoryContext): Promise<void> {
+    const connected = await this.ensureConnected();
+    if (!connected) return;
+
+    await this.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify(session),
+      tags: ["chat-session", session.sessionId],
+      source: "explicit",
+      context,
+    });
+  }
+
+  /** List recent chat sessions for the current file, sorted by lastMessageAt descending. */
+  async listSessions(context: MemoryContext, limit: number = 20): Promise<ChatSession[]> {
+    const connected = await this.ensureConnected();
+    if (!connected) return [];
+
+    // Use list and filter by chat-session tag client-side
+    const entries = await this.list(context, "file", "context", limit * 3);
+
+    const sessions: ChatSession[] = [];
+    for (const entry of entries) {
+      if (!entry.tags?.includes("chat-session")) continue;
+      try {
+        const parsed = JSON.parse(entry.content) as ChatSession;
+        sessions.push(parsed);
+      } catch {
+        // Skip malformed entries
+      }
+    }
+
+    sessions.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+    return sessions.slice(0, limit);
+  }
+
+  /** Update a session's metadata (name, summary, messageCount, lastMessageAt). */
+  async updateSession(session: ChatSession, context: MemoryContext): Promise<void> {
+    const connected = await this.ensureConnected();
+    if (!connected) return;
+
+    // Remove old entry by sessionId tag, then store updated one
+    try {
+      await this.forget(context, undefined, session.sessionId, "file");
+    } catch {
+      // Old entry may not exist yet — ignore
+    }
+
+    await this.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify(session),
+      tags: ["chat-session", session.sessionId],
+      source: "explicit",
+      context,
+    });
+  }
+
+  /** Get messages for a specific session, sorted by timestamp ascending. */
+  async getSessionMessages(sessionId: string, context: MemoryContext, limit: number = 50): Promise<ChatHistoryEntry[]> {
+    const connected = await this.ensureConnected();
+    if (!connected) return [];
+
+    // Use list with a generous limit and filter by sessionId tag client-side
+    // (recall uses text search which may not reliably match sessionId in tags)
+    const entries = await this.list(context, "file", "context", limit * 3);
+
+    const messages: ChatHistoryEntry[] = [];
+    for (const entry of entries) {
+      if (!entry.tags?.includes("chat-message") || !entry.tags?.includes(sessionId)) continue;
+      try {
+        const parsed = JSON.parse(entry.content) as ChatHistoryEntry;
+        messages.push(parsed);
+      } catch {
+        // Skip malformed entries
+      }
+    }
+
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+    return messages.slice(-limit);
   }
 
   // ─── HTTP Helpers ──────────────────────────────────────────────────────────

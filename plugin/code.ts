@@ -18,6 +18,8 @@ var pollerRef: Poller | null = null;
 var wsRef: WSClient | null = null;
 var currentChannel: number | null = null;
 var executorRef: Executor | null = null;
+var currentSessionId: string | null = null;
+var currentSessionName: string | null = null;
 
 function reportStatus(transport: TransportStatus, channel?: number): void {
   figma.ui.postMessage({
@@ -177,6 +179,14 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       figma.ui.resize(message.width as number, message.height as number);
       return;
     }
+    if (message && message.type === "session-create") {
+      handleSessionCreate();
+      return;
+    }
+    if (message && message.type === "session-select") {
+      handleSessionSelect(message.sessionId as string);
+      return;
+    }
     if (message && message.type === "cache-chat-history") {
       var cacheKey = "rex-chat-history-" + (figma.fileKey || "unknown");
       figma.clientStorage.setAsync(cacheKey, message.messages).catch(function() {});
@@ -208,8 +218,8 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
     figma.ui.postMessage({ type: "channel-connected", channel: channel });
     reportStatus("http", channel);
 
-    // Load chat history (two-phase: local cache then remote)
-    loadChatHistory(poller).catch(function(e) { console.warn("Chat history load failed:", e); });
+    // Show session picker and load sessions list
+    showSessionPicker(poller).catch(function(e) { console.warn("Session picker failed:", e); });
 
     var sessionId = poller.getSessionId();
     if (sessionId) ws.setSessionId(sessionId);
@@ -260,6 +270,64 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       type: "channel-error",
       message: "Connected to channel " + channel + " but the handshake failed. Try again?",
     });
+  }
+}
+
+// ─── Session Picker ───────────────────────────────────────────────────
+
+async function showSessionPicker(poller: Poller): Promise<void> {
+  // Tell UI to show session picker
+  figma.ui.postMessage({ type: "show-session-picker" });
+
+  // Fetch sessions list from server
+  try {
+    var resp = await poller.getAuthenticated("/sessions");
+    if (resp.status >= 200 && resp.status < 300 && resp.body) {
+      var data = JSON.parse(resp.body);
+      figma.ui.postMessage({ type: "session-list", sessions: data.sessions || [] });
+    } else {
+      figma.ui.postMessage({ type: "session-list", sessions: [] });
+    }
+  } catch (e) {
+    console.warn("Failed to load sessions:", e);
+    figma.ui.postMessage({ type: "session-list", sessions: [] });
+  }
+}
+
+async function handleSessionCreate(): Promise<void> {
+  if (!pollerRef) return;
+  try {
+    var resp = await pollerRef.postAuthenticated("/session/create", {});
+    if (resp.status >= 200 && resp.status < 300 && resp.body) {
+      var data = JSON.parse(resp.body);
+      var session = data.session;
+      if (session) {
+        currentSessionId = session.sessionId;
+        currentSessionName = session.name;
+        figma.ui.postMessage({ type: "session-created", session: session });
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to create session:", e);
+  }
+}
+
+async function handleSessionSelect(sessionId: string): Promise<void> {
+  if (!pollerRef) return;
+  try {
+    var resp = await pollerRef.postAuthenticated("/session/select", { sessionId: sessionId });
+    if (resp.status >= 200 && resp.status < 300 && resp.body) {
+      var data = JSON.parse(resp.body);
+      currentSessionId = sessionId;
+      currentSessionName = data.sessionName || "Session";
+      figma.ui.postMessage({
+        type: "session-selected",
+        messages: data.messages || [],
+        sessionName: currentSessionName,
+      });
+    }
+  } catch (e) {
+    console.warn("Failed to select session:", e);
   }
 }
 

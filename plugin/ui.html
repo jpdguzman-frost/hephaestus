@@ -825,6 +825,133 @@
     opacity: 0.8;
   }
 
+  /* ─── Session Picker ─── */
+  #session-picker {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    background: #3B3634;
+  }
+
+  #session-picker-header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 14px 16px;
+    background: #3B3634;
+    border-bottom: 1px solid rgba(0,0,0,0.09);
+    flex-shrink: 0;
+  }
+
+  #session-picker-header .sp-logo {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: #F06800;
+  }
+
+  #session-picker-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  #new-session-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 16px;
+    background: #F06800;
+    border: none;
+    border-radius: 12px;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: #FFFFFF;
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  #new-session-btn:hover {
+    background: #D85E00;
+  }
+
+  #session-list-label {
+    margin-top: 24px;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: #8C827A;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  #session-list {
+    margin-top: 10px;
+  }
+
+  .session-row {
+    padding: 16px 0;
+    cursor: pointer;
+  }
+
+  .session-row:hover {
+    opacity: 0.85;
+  }
+
+  .session-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .session-row-name {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: #DBD6D2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+  }
+
+  .session-row-time {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 400;
+    font-size: 10px;
+    color: #BFB6AE;
+    flex-shrink: 0;
+  }
+
+  .session-row-summary {
+    margin-top: 4px;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 400;
+    font-size: 12px;
+    color: #8C827A;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .session-divider {
+    height: 1px;
+    background: #2E2A28;
+  }
+
+  #session-empty {
+    text-align: center;
+    padding: 40px 0;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-size: 12px;
+    color: #8C827A;
+    opacity: 0.6;
+  }
+
   /* ─── Channel Input Screen ─── */
   #channel-screen {
     display: none;
@@ -1182,6 +1309,17 @@
     <div id="disconnected-buttons">
       <button id="reconnect-btn">Reconnect</button>
       <button id="change-channel-btn">Change channel</button>
+    </div>
+  </div>
+
+  <div id="session-picker" style="display:none;">
+    <div id="session-picker-header">
+      <span class="sp-logo">REX</span>
+    </div>
+    <div id="session-picker-content">
+      <button id="new-session-btn">+ New Session</button>
+      <div id="session-list-label">RECENT SESSIONS</div>
+      <div id="session-list"></div>
     </div>
   </div>
 
@@ -1659,6 +1797,18 @@
         break;
       case "ws-disconnect":
         handleWsDisconnect();
+        break;
+      case "show-session-picker":
+        showSessionPicker();
+        break;
+      case "session-list":
+        renderSessionList(msg.sessions);
+        break;
+      case "session-created":
+        onSessionCreated(msg.session);
+        break;
+      case "session-selected":
+        onSessionSelected(msg.messages, msg.sessionName);
         break;
       case "chat-history":
         renderChatHistory(msg.messages, msg.source);
@@ -2523,13 +2673,126 @@
   function showConnectedUI(channel) {
     channelScreen.style.display = "none";
     channelDisconnected.style.display = "none";
-    statusContainer.style.display = "flex";
+    statusContainer.style.display = "none";
     currentPort = channel;
     resetReconnectBtn();
-    resizeForCurrentMode();
-    // Show loading indicator while chat history is fetched
-    showHistoryLoading();
+    // Don't show status — session picker will be shown instead
   }
+
+  // ─── Session Picker ──────────────────────────────────────────────────────
+
+  var sessionPickerEl = document.getElementById("session-picker");
+  var sessionListEl = document.getElementById("session-list");
+  var newSessionBtn = document.getElementById("new-session-btn");
+  var activeSessionName = null;
+
+  function showSessionPicker() {
+    channelScreen.style.display = "none";
+    channelDisconnected.style.display = "none";
+    statusContainer.style.display = "none";
+    if (chatContainer) chatContainer.classList.remove("active");
+    sessionPickerEl.style.display = "flex";
+    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 580 } }, "*");
+  }
+
+  function hideSessionPicker() {
+    sessionPickerEl.style.display = "none";
+  }
+
+  function formatSessionTime(timestamp) {
+    var now = new Date();
+    var d = new Date(timestamp);
+    var diff = now.getTime() - d.getTime();
+    var oneDay = 86400000;
+    if (diff < oneDay && now.getDate() === d.getDate()) {
+      // Today — show time
+      var h = d.getHours();
+      var m = d.getMinutes();
+      var ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12 || 12;
+      return h + ":" + (m < 10 ? "0" : "") + m + " " + ampm;
+    } else if (diff < 2 * oneDay && now.getDate() - d.getDate() === 1) {
+      return "Yesterday";
+    } else {
+      var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return months[d.getMonth()] + " " + d.getDate();
+    }
+  }
+
+  function renderSessionList(sessions) {
+    sessionListEl.innerHTML = "";
+    if (!sessions || sessions.length === 0) {
+      var empty = document.createElement("div");
+      empty.id = "session-empty";
+      empty.textContent = "No sessions yet. Start a new one!";
+      sessionListEl.appendChild(empty);
+      return;
+    }
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i];
+      if (i > 0) {
+        var divider = document.createElement("div");
+        divider.className = "session-divider";
+        sessionListEl.appendChild(divider);
+      }
+      var row = document.createElement("div");
+      row.className = "session-row";
+      row.setAttribute("data-session-id", s.sessionId);
+
+      var top = document.createElement("div");
+      top.className = "session-row-top";
+
+      var name = document.createElement("div");
+      name.className = "session-row-name";
+      name.textContent = s.name || "Untitled Session";
+      top.appendChild(name);
+
+      var time = document.createElement("div");
+      time.className = "session-row-time";
+      time.textContent = formatSessionTime(s.lastMessageAt || s.createdAt);
+      top.appendChild(time);
+
+      row.appendChild(top);
+
+      if (s.summary) {
+        var summary = document.createElement("div");
+        summary.className = "session-row-summary";
+        summary.textContent = s.summary;
+        row.appendChild(summary);
+      }
+
+      row.addEventListener("click", (function(sid) {
+        return function() {
+          parent.postMessage({ pluginMessage: { type: "session-select", sessionId: sid } }, "*");
+        };
+      })(s.sessionId));
+
+      sessionListEl.appendChild(row);
+    }
+  }
+
+  function onSessionCreated(session) {
+    hideSessionPicker();
+    activeSessionName = session ? session.name : "New Session";
+    // Clear chat and switch to chat mode
+    chatMessages.innerHTML = "";
+    switchToChat();
+  }
+
+  function onSessionSelected(messages, sessionName) {
+    hideSessionPicker();
+    activeSessionName = sessionName || "Session";
+    // Render history then switch to chat
+    chatMessages.innerHTML = "";
+    if (messages && messages.length > 0) {
+      renderChatHistory(messages, "remote");
+    }
+    switchToChat();
+  }
+
+  newSessionBtn.addEventListener("click", function() {
+    parent.postMessage({ pluginMessage: { type: "session-create" } }, "*");
+  });
 
   function showDisconnectedOverlay(channel) {
     disconnectedChannelNum.textContent = channel || currentPort || "?";

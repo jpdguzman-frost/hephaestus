@@ -16,7 +16,7 @@ import { HeartbeatMonitor } from "./heartbeat.js";
 import { CommentWatcher } from "./comment-watcher.js";
 import { MemoryServiceClient } from "../memory/client.js";
 import { loadMemoryConfig } from "../memory/config.js";
-import type { MemoryConfig, ChatHistoryEntry, MemoryContext } from "../memory/types.js";
+import type { MemoryConfig, ChatHistoryEntry, ChatSession, MemoryContext } from "../memory/types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +74,19 @@ export class RelayServer {
 
   // Stream accumulator for persisting complete streaming responses
   private streamAccumulator: Map<string, string> = new Map();
+
+  // Active chat session for session-based conversations
+  private _activeChatSession: ChatSession | null = null;
+
+  /** The active chat session ID (null if no session selected). */
+  get activeChatSessionId(): string | null {
+    return this._activeChatSession?.sessionId ?? null;
+  }
+
+  /** The active chat session name. */
+  get activeChatSessionName(): string | null {
+    return this._activeChatSession?.name ?? null;
+  }
 
   /** Access the memory store (null if disabled/not connected). */
   get memoryStore(): MemoryServiceClient | null {
@@ -253,6 +266,7 @@ export class RelayServer {
     this.chatInbox = [];
     this.chatOutbox = [];
     this.streamAccumulator.clear();
+    this._activeChatSession = null;
 
     // Clean up components
     this.commentWatcher.stop();
@@ -361,19 +375,51 @@ export class RelayServer {
   /** Persist a chat message to the remote memory service (fire-and-forget). */
   private persistChatMessage(entry: ChatHistoryEntry): void {
     if (!this._memoryStore || !this.connection.session) return;
-    const session = this.connection.session;
+    const pluginSession = this.connection.session;
     const ctx: MemoryContext = {
-      fileKey: session.fileKey,
-      fileName: session.fileName,
-      userId: session.user?.id,
-      userName: session.user?.name,
+      fileKey: pluginSession.fileKey,
+      fileName: pluginSession.fileName,
+      userId: pluginSession.user?.id,
+      userName: pluginSession.user?.name,
     };
-    this._memoryStore.saveChatMessage(entry, ctx).catch((err) => {
+
+    // Tag with session ID if an active chat session exists
+    const chatSession = this._activeChatSession;
+    if (chatSession) {
+      entry.sessionId = chatSession.sessionId;
+    }
+
+    // Use session-specific tags if we have an active session
+    const tags = chatSession
+      ? ["chat-message", chatSession.sessionId]
+      : ["chat-history", entry.role];
+
+    this._memoryStore.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify(entry.message.length > 2000 ? { ...entry, message: entry.message.slice(0, 2000) } : entry),
+      tags,
+      source: "explicit",
+      context: ctx,
+    }).catch((err) => {
       this.logger.warn("Failed to persist chat message", {
         id: entry.id,
         error: err instanceof Error ? err.message : String(err),
       });
     });
+
+    // Update session metadata (summary, messageCount, lastMessageAt)
+    if (chatSession && this._memoryStore) {
+      chatSession.messageCount++;
+      chatSession.lastMessageAt = entry.timestamp;
+      chatSession.summary = entry.message.slice(0, 100);
+      this._memoryStore.updateSession(chatSession, ctx).catch((err) => {
+        this.logger.warn("Failed to update chat session", {
+          sessionId: chatSession.sessionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
   }
 
   /**
@@ -624,13 +670,124 @@ export class RelayServer {
           userId: this.connection.session.user?.id,
           userName: this.connection.session.user?.name,
         };
-        const messages = await this._memoryStore.getChatHistory(ctx, 20);
+        // Session-scoped history if active session exists
+        const messages = this._activeChatSession
+          ? await this._memoryStore.getSessionMessages(this._activeChatSession.sessionId, ctx, 50)
+          : await this._memoryStore.getChatHistory(ctx, 20);
         return { messages };
       } catch (err) {
         this.logger.warn("Failed to fetch chat history", {
           error: err instanceof Error ? err.message : String(err),
         });
         return { messages: [] };
+      }
+    });
+
+    // POST /session/create — create a new chat session
+    app.post("/session/create", {
+      preHandler: authHook,
+    }, async (_req: FastifyRequest, _reply: FastifyReply) => {
+      const pluginSession = this.connection.session;
+      if (!this._memoryStore || !pluginSession) {
+        return { error: "Not connected" };
+      }
+      const now = Date.now();
+      const session: ChatSession = {
+        sessionId: "sess_chat_" + now,
+        name: "New Session",
+        summary: "",
+        fileKey: pluginSession.fileKey,
+        createdAt: now,
+        lastMessageAt: now,
+        messageCount: 0,
+      };
+      const ctx: MemoryContext = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name,
+      };
+      try {
+        await this._memoryStore.createSession(session, ctx);
+        this._activeChatSession = session;
+        this.logger.info("Chat session created", { sessionId: session.sessionId });
+        return { session };
+      } catch (err) {
+        this.logger.warn("Failed to create chat session", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        // Still set locally even if remote fails
+        this._activeChatSession = session;
+        return { session };
+      }
+    });
+
+    // GET /sessions — list recent chat sessions
+    app.get("/sessions", {
+      preHandler: authHook,
+    }, async (_req: FastifyRequest, _reply: FastifyReply) => {
+      const pluginSession = this.connection.session;
+      if (!this._memoryStore || !pluginSession) {
+        return { sessions: [] };
+      }
+      try {
+        const ctx: MemoryContext = {
+          fileKey: pluginSession.fileKey,
+          fileName: pluginSession.fileName,
+          userId: pluginSession.user?.id,
+          userName: pluginSession.user?.name,
+        };
+        const sessions = await this._memoryStore.listSessions(ctx, 20);
+        return { sessions };
+      } catch (err) {
+        this.logger.warn("Failed to list sessions", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return { sessions: [] };
+      }
+    });
+
+    // POST /session/select — select an existing session and load its messages
+    app.post("/session/select", {
+      preHandler: authHook,
+    }, async (req: FastifyRequest, _reply: FastifyReply) => {
+      const body = req.body as { sessionId?: string } | null;
+      const pluginSession = this.connection.session;
+      if (!body?.sessionId || !this._memoryStore || !pluginSession) {
+        return { error: "Missing sessionId or not connected" };
+      }
+      const ctx: MemoryContext = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name,
+      };
+      try {
+        const messages = await this._memoryStore.getSessionMessages(body.sessionId, ctx, 50);
+        // Find the session metadata from the sessions list
+        const sessions = await this._memoryStore.listSessions(ctx, 50);
+        const session = sessions.find(s => s.sessionId === body.sessionId);
+        if (session) {
+          this._activeChatSession = session;
+        } else {
+          // Fallback: create a minimal session object
+          this._activeChatSession = {
+            sessionId: body.sessionId,
+            name: "Session",
+            summary: "",
+            fileKey: pluginSession.fileKey,
+            createdAt: Date.now(),
+            lastMessageAt: Date.now(),
+            messageCount: messages.length,
+          };
+        }
+        this.logger.info("Chat session selected", { sessionId: body.sessionId, messageCount: messages.length });
+        return { messages, sessionName: this._activeChatSession.name };
+      } catch (err) {
+        this.logger.warn("Failed to select session", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return { messages: [], sessionName: "Session" };
       }
     });
   }

@@ -209,6 +209,29 @@
     white-space: nowrap;
   }
 
+  #chat-session-bar {
+    display: none;
+    padding: 8px 16px 12px 16px;
+    background: rgba(59, 54, 52, 0.8);
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+  }
+
+  #chat-session-bar.visible {
+    display: block;
+  }
+
+  #chat-session-name {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: #DBD6D2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   #chat-header-title {
     display: flex;
     align-items: center;
@@ -1420,6 +1443,9 @@
         <button id="pill-status-btn">Status</button>
         <span id="pill-talk-label">Talk</span>
       </div>
+    </div>
+    <div id="chat-session-bar">
+      <div id="chat-session-name"></div>
     </div>
     <div id="chat-empty-state">
       <p id="chat-empty-text"></p>
@@ -2867,17 +2893,29 @@
     }
   }
 
+  var chatSessionBar = document.getElementById("chat-session-bar");
+  var chatSessionNameEl = document.getElementById("chat-session-name");
+
+  function updateSessionBar(name) {
+    activeSessionName = name || "New Session";
+    chatSessionNameEl.textContent = activeSessionName;
+    chatSessionBar.classList.add("visible");
+  }
+
+  function hideSessionBar() {
+    chatSessionBar.classList.remove("visible");
+  }
+
   function onSessionCreated(session) {
     hideSessionPicker();
-    activeSessionName = session ? session.name : "New Session";
-    // Clear chat and switch to chat mode
+    updateSessionBar(session ? session.name : "New Session");
     chatMessages.innerHTML = "";
     switchToChat();
   }
 
   function onSessionSelected(messages, sessionName, source) {
     hideSessionPicker();
-    activeSessionName = sessionName || "Session";
+    updateSessionBar(sessionName);
 
     if (source === "cache") {
       // Phase 1: instant render from cache — only if chat is empty

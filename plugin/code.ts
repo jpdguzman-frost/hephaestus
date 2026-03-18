@@ -280,7 +280,8 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
 // ─── Session Picker ───────────────────────────────────────────────────
 
 async function showSessionPicker(poller: Poller): Promise<void> {
-  // Tell UI to show session picker
+  // Resize and tell UI to show session picker
+  figma.ui.resize(420, 539);
   figma.ui.postMessage({ type: "show-session-picker" });
 
   // Fetch sessions list from server

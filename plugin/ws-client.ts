@@ -39,6 +39,10 @@ export class WSClient {
   private reconnectAttempt = 0;
   private statusCallback: ((connected: boolean) => void) | null = null;
 
+  // Callbacks for connection state changes (used by poller to adapt polling rate)
+  onDegraded: (() => void) | null = null;
+  onReconnected: (() => void) | null = null;
+
   // Bounded send queue for messages while disconnected
   private pendingQueue: WSMessage[] = [];
   private readonly MAX_QUEUE = 20;
@@ -95,6 +99,8 @@ export class WSClient {
         });
 
         this.notifyStatus(true);
+        // Signal poller to resume adaptive polling (WS restored)
+        if (this.onReconnected) this.onReconnected();
         break;
 
       case "ws-message":
@@ -105,6 +111,8 @@ export class WSClient {
         console.log("WebSocket closed: " + msg.code + " " + msg.reason);
         this._isConnected = false;
         this.notifyStatus(false);
+        // Signal poller to switch to burst-rate HTTP polling
+        if (this.onDegraded) this.onDegraded();
         if (this.shouldReconnect) {
           this.scheduleReconnect();
         }
@@ -212,15 +220,8 @@ export class WSClient {
             break;
           }
 
-          // Check for chat listening state signal
-          if (message.id === "chat-listening" && payload) {
-            if (payload.listening === true) {
-              figma.ui.postMessage({ type: "chat-available" });
-            } else {
-              figma.ui.postMessage({ type: "chat-unavailable" });
-            }
-            break;
-          }
+          // Chat listening signal removed — chat is always available when connected
+          // Messages queue server-side in a bounded FIFO inbox
 
           // Check for chat streaming chunk
           if (message.id === "chat-chunk" && payload) {

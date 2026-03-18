@@ -56,11 +56,13 @@ export class RelayServer {
     return this._boundPort;
   }
 
-  // Chat message queue (plugin → MCP server)
+  // Chat message queue (plugin → MCP server) — bounded FIFO queue
+  private readonly CHAT_INBOX_MAX = 50;
   private chatInbox: Array<{ id: string; message: string; selection: unknown[]; timestamp: number }> = [];
   private chatWaiters: Array<{ resolve: (msg: { id: string; message: string; selection: unknown[]; timestamp: number }) => void; timer: ReturnType<typeof setTimeout> }> = [];
 
-  // Chat response queue (MCP server → plugin)
+  // Chat response queue (MCP server → plugin) — bounded
+  private readonly CHAT_OUTBOX_MAX = 50;
   private chatOutbox: Array<{ id: string; message: string; timestamp: number; isError?: boolean; _isChunk?: boolean; _done?: boolean }> = [];
 
   // Comment watcher for @rex mentions
@@ -247,11 +249,6 @@ export class RelayServer {
     this.chatWaiters = [];
     this.chatInbox = [];
     this.chatOutbox = [];
-    if (this.chatListeningGraceTimer) {
-      clearTimeout(this.chatListeningGraceTimer);
-      this.chatListeningGraceTimer = null;
-    }
-    this._chatListening = false;
 
     // Clean up components
     this.commentWatcher.stop();
@@ -315,106 +312,55 @@ export class RelayServer {
     return this._activityState;
   }
 
-  /** Whether wait_for_chat is actively listening (for plugin to show/hide chat button). */
-  private _chatListening = false;
-  private chatListeningGraceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  get chatListening(): boolean {
-    return this._chatListening;
-  }
-
-  private setChatListening(listening: boolean): void {
-    // Clear any pending grace timer
-    if (this.chatListeningGraceTimer) {
-      clearTimeout(this.chatListeningGraceTimer);
-      this.chatListeningGraceTimer = null;
-    }
-
-    if (this._chatListening === listening) return;
-    this._chatListening = listening;
-
-    // Push via WebSocket if connected
-    if (this.wsClient?.readyState === WebSocket.OPEN) {
-      const msg: WsMessage = {
-        type: "command",
-        id: "chat-listening",
-        payload: { listening } as unknown as Record<string, unknown>,
-        timestamp: Date.now(),
-      };
-      this.wsClient.send(JSON.stringify(msg));
-    }
-  }
-
-  /**
-   * Schedule chatListening = false after a grace period.
-   * Cancelled if wait_for_chat is called again before it fires.
-   */
-  private scheduleChatListeningTimeout(): void {
-    if (this.chatListeningGraceTimer) {
-      clearTimeout(this.chatListeningGraceTimer);
-    }
-    this.chatListeningGraceTimer = setTimeout(() => {
-      this.chatListeningGraceTimer = null;
-      // If Claude is still working on tools, reschedule — it will call wait_for_chat when done
-      if (this.chatWaiters.length === 0 && this.activeToolCount > 0) {
-        this.scheduleChatListeningTimeout();
-        return;
-      }
-      // If no waiters registered in the grace period, stop listening
-      if (this.chatWaiters.length === 0) {
-        this.setChatListening(false);
-      }
-    }, 5000);
-  }
+  // Chat is always available when server is running — messages queue in the bounded inbox.
+  // The old chatListening state machine has been removed. Plugin always shows chat as available.
 
   // ─── Chat Infrastructure ──────────────────────────────────────────────
 
   /**
    * Called by the plugin to send a chat message.
-   * If an MCP tool is long-polling (via wait_for_chat), resolve it immediately.
+   * Queue-first: message always enters the bounded FIFO inbox.
+   * If a waiter exists, it consumes from the queue immediately.
    */
   enqueueChatMessage(msg: { id: string; message: string; selection: unknown[]; timestamp: number }): void {
-    // If there's a waiter, resolve immediately
+    // If a waiter exists, deliver directly — skip the queue
     const waiter = this.chatWaiters.shift();
     if (waiter) {
       clearTimeout(waiter.timer);
       waiter.resolve(msg);
-      // If no more waiters, start grace timer — Claude should call wait_for_chat again soon
-      if (this.chatWaiters.length === 0) {
-        this.scheduleChatListeningTimeout();
-      }
       return;
     }
-    // Otherwise queue it
+
+    // No waiter — queue the message
+    if (this.chatInbox.length >= this.CHAT_INBOX_MAX) {
+      const dropped = this.chatInbox.shift();
+      this.logger.warn("Chat inbox overflow — dropped oldest message", { droppedId: dropped?.id });
+    }
     this.chatInbox.push(msg);
   }
 
+  /** Number of pending chat messages in the inbox. */
+  get pendingChatCount(): number {
+    return this.chatInbox.length;
+  }
+
   /**
-   * Called by the MCP tool `wait_for_chat` to long-poll for a message.
-   * Returns immediately if there's a queued message, otherwise waits up to timeoutMs.
+   * Called by the MCP tool `wait_for_chat` to consume a message from the queue.
+   * Returns immediately if messages are queued, otherwise waits up to timeoutMs.
    */
   waitForChatMessage(timeoutMs: number): Promise<{ id: string; message: string; selection: unknown[]; timestamp: number } | null> {
-    // Check inbox first
+    // Check inbox first — return immediately if messages are queued
     const queued = this.chatInbox.shift();
     if (queued) {
-      // Still listening — signal stays true
-      this.setChatListening(true);
       return Promise.resolve(queued);
     }
 
-    // Signal that we're listening
-    this.setChatListening(true);
-
-    // Long-poll
+    // No messages queued — long-poll until one arrives or timeout
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         // Remove this waiter
         const idx = this.chatWaiters.findIndex(w => w.resolve === resolve);
         if (idx >= 0) this.chatWaiters.splice(idx, 1);
-        // If no more waiters, start grace timer — Claude should re-call wait_for_chat soon
-        if (this.chatWaiters.length === 0) {
-          this.scheduleChatListeningTimeout();
-        }
         resolve(null);
       }, timeoutMs);
 
@@ -429,7 +375,12 @@ export class RelayServer {
   sendChatResponse(response: { id: string; message: string; timestamp: number; isError?: boolean }): void {
     // ALWAYS queue for HTTP polling — this is the reliable baseline.
     // WebSocket is an optional fast path but can silently fail.
+    if (this.chatOutbox.length >= this.CHAT_OUTBOX_MAX) {
+      const dropped = this.chatOutbox.shift();
+      this.logger.warn("Chat outbox overflow — dropped oldest response", { droppedId: dropped?.id });
+    }
     this.chatOutbox.push(response);
+    this.logger.debug("Chat response queued for delivery", { id: response.id, outboxSize: this.chatOutbox.length });
 
     // Also push via WebSocket for instant delivery (best-effort)
     if (this.wsClient?.readyState === WebSocket.OPEN) {
@@ -441,9 +392,12 @@ export class RelayServer {
           timestamp: Date.now(),
         };
         this.wsClient.send(JSON.stringify(msg));
+        this.logger.debug("Chat response also sent via WebSocket", { id: response.id });
       } catch {
-        // WS send failed — HTTP polling will deliver it
+        this.logger.warn("Chat response WS send failed — HTTP polling will deliver", { id: response.id });
       }
+    } else {
+      this.logger.debug("Chat response WS unavailable — HTTP polling only", { id: response.id });
     }
   }
 
@@ -482,15 +436,32 @@ export class RelayServer {
   drainChatResponses(): Array<{ id: string; message: string; timestamp: number; isError?: boolean; _isChunk?: boolean; _done?: boolean }> {
     const responses = [...this.chatOutbox];
     this.chatOutbox = [];
+    if (responses.length > 0) {
+      this.logger.debug("Chat responses drained for HTTP delivery", {
+        count: responses.length,
+        ids: responses.map(r => r.id),
+      });
+    }
     return responses;
   }
 
   /**
    * Send a command to the plugin.
    * Uses WebSocket if connected, otherwise queues for HTTP polling.
+   * Pauses heartbeat while command is in-flight — the plugin is single-threaded
+   * and cannot respond to pings during figma.* execution.
    */
   sendCommand(command: Command): Promise<CommandResult> {
+    // Pause heartbeat — plugin can't respond to pings while executing
+    this.heartbeat.pauseWsHeartbeat();
+
     const promise = this.queue.enqueue(command);
+
+    // Resume heartbeat when command completes (success or failure)
+    promise.then(
+      () => this.heartbeat.resumeWsHeartbeat(),
+      () => this.heartbeat.resumeWsHeartbeat(),
+    );
 
     // If WebSocket is active, push immediately
     if (this.connection.isWebSocketActive && this.wsClient?.readyState === WebSocket.OPEN) {
@@ -687,8 +658,8 @@ export class RelayServer {
 
       // Even with no commands, signal activity state so the plugin
       // can show forging animation when Claude is working
-      if (this.isActive || chatResponses.length > 0 || this.chatListening) {
-        return { commands: [], activity: this.isActive, chatResponses, chatListening: this.chatListening };
+      if (this.isActive || chatResponses.length > 0 || this.pendingChatCount > 0) {
+        return { commands: [], activity: this.isActive, chatResponses };
       }
       reply.code(204);
       return undefined;
@@ -720,7 +691,6 @@ export class RelayServer {
       pollingInterval: suggestedInterval,
       activity: this.isActive,
       chatResponses,
-      chatListening: this.chatListening,
       queueDepth: remainingStats.pending + remainingStats.inFlight,
     };
   }

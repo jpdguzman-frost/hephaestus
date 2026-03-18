@@ -212,6 +212,16 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       reportStatus(wsConnected ? "websocket" : "http", channel);
     });
 
+    // When WS drops, switch poller to burst-rate HTTP polling
+    ws.onDegraded = function() {
+      poller.setHighPriorityMode(true);
+    };
+
+    // When WS reconnects, resume adaptive polling
+    ws.onReconnected = function() {
+      poller.setHighPriorityMode(false);
+    };
+
     ws.connect();
 
     poller.setReconnectCallback(function() {

@@ -377,6 +377,7 @@ async function handleGetStatus(
   const transport = connectionInfo["transport"] as string | undefined;
 
   const memoryStore = context.relay.memoryStore;
+  const pendingChat = context.relay.pendingChatCount;
 
   const ch = context.relay.boundPort;
   const pluginConnected = state !== "WAITING";
@@ -408,6 +409,10 @@ async function handleGetStatus(
       connected: memoryStore?.isConnected ?? false,
       url: memoryStore?.url ?? null,
     },
+    chat: {
+      pendingMessages: pendingChat,
+      hasMessages: pendingChat > 0,
+    },
     uptime: Math.floor(healthMetrics.connection.uptime / 1000),
   };
 }
@@ -421,20 +426,28 @@ async function handleWaitForChat(
   const msg = await context.relay.waitForChatMessage(timeout);
 
   if (!msg) {
+    const pending = context.relay.pendingChatCount;
     return {
       status: "timeout",
+      pendingMessages: pending,
       message: "No chat message received within timeout period. Call wait_for_chat again to keep listening.",
-      _hint: "IMPORTANT: Call wait_for_chat again immediately to continue listening for messages.",
+      _hint: pending > 0
+        ? `There are ${pending} queued message(s). Call wait_for_chat again immediately to retrieve them.`
+        : "IMPORTANT: Call wait_for_chat again immediately to continue listening for messages.",
     };
   }
 
+  const pending = context.relay.pendingChatCount;
   return {
     status: "received",
     id: msg.id,
     message: msg.message,
     selection: msg.selection,
     timestamp: msg.timestamp,
-    _hint: "After processing this message and sending a response with send_chat_response, call wait_for_chat again to listen for the next message.",
+    pendingMessages: pending,
+    _hint: pending > 0
+      ? `${pending} more message(s) queued. Call wait_for_chat again immediately to retrieve the next one.`
+      : "After processing this message and sending a response with send_chat_response, call wait_for_chat again to listen for the next message.",
   };
 }
 

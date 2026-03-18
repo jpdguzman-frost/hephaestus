@@ -123,8 +123,11 @@ export class Poller {
   private idleThreshold = 10000;
   private lastCommandTime = 0;
 
-  // Chat listening state tracking
-  private lastChatListening = false;
+  // Chat availability state tracking
+  private chatAvailableEmitted = false;
+
+  // High-priority polling mode (burst rate when WS drops)
+  private highPriority = false;
 
   // Connection health tracking
   private consecutiveErrors = 0;
@@ -248,8 +251,36 @@ export class Poller {
     this.poll();
   }
 
+  /**
+   * Switch to high-priority burst-rate polling (100ms).
+   * Used when WebSocket drops to ensure commands are picked up via HTTP.
+   */
+  setHighPriorityMode(enabled: boolean): void {
+    this.highPriority = enabled;
+    if (enabled) {
+      console.log("Poller: high-priority mode ON (WS degraded, polling at burst rate)");
+      this.forceImmediatePoll();
+    } else {
+      console.log("Poller: high-priority mode OFF (WS restored)");
+    }
+  }
+
+  /**
+   * Force an immediate poll cycle, bypassing any pending timer.
+   */
+  forceImmediatePoll(): void {
+    if (!this.polling) return;
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+    this.poll();
+  }
+
   async disconnect(): Promise<void> {
     this.polling = false;
+    this.chatAvailableEmitted = false;
+    figma.ui.postMessage({ type: "chat-unavailable" });
     if (this.pollTimer) {
       clearTimeout(this.pollTimer);
       this.pollTimer = null;
@@ -305,11 +336,10 @@ export class Poller {
         var localCommandCount = (commands && commands.length) ? commands.length : 0;
         figma.ui.postMessage({ type: "queue-update", count: serverQueueRemainder + localCommandCount });
 
-        // Forward chat listening state to UI (only on change)
-        var chatListeningNow = data.chatListening === true;
-        if (chatListeningNow !== this.lastChatListening) {
-          this.lastChatListening = chatListeningNow;
-          figma.ui.postMessage({ type: chatListeningNow ? "chat-available" : "chat-unavailable" });
+        // Chat is always available when connected — messages queue server-side
+        if (!this.chatAvailableEmitted) {
+          this.chatAvailableEmitted = true;
+          figma.ui.postMessage({ type: "chat-available" });
         }
 
         // Forward chat responses/chunks to UI
@@ -408,12 +438,8 @@ export class Poller {
           }
         }
       } else if (resp.status >= 200 && resp.status < 300 && !resp.body) {
-        // 204 No Content — nothing happening, reset chat listening if needed
+        // 204 No Content — nothing happening, chat stays available (messages queue server-side)
         this.consecutiveErrors = 0;
-        if (this.lastChatListening) {
-          this.lastChatListening = false;
-          figma.ui.postMessage({ type: "chat-unavailable" });
-        }
       } else if (resp.status === 503) {
         // Session lost (server disconnected us, e.g., missed polls during command execution)
         console.warn("Session lost (503), reconnecting immediately...");
@@ -511,6 +537,9 @@ export class Poller {
   }
 
   private getAdaptiveInterval(): number {
+    // High-priority mode overrides adaptive interval — burst rate during WS degradation
+    if (this.highPriority) return this.burstInterval;
+
     const timeSinceLastCommand = Date.now() - this.lastCommandTime;
     if (this.lastCommandTime > 0 && timeSinceLastCommand < 1000) {
       return this.burstInterval;

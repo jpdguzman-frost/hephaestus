@@ -58,6 +58,7 @@ export class HeartbeatMonitor {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimeout: ReturnType<typeof setTimeout> | null = null;
   private pingSender: (() => void) | null = null;
+  private heartbeatPaused = false;
 
   // Metrics
   private readonly metrics: HealthMetrics = {
@@ -169,6 +170,9 @@ export class HeartbeatMonitor {
 
     // Send ping at the configured interval
     this.pingTimer = setInterval(() => {
+      // Skip pings while plugin is executing a command
+      if (this.heartbeatPaused) return;
+
       if (this.awaitingPong) {
         this.missedPongs++;
         this.logger.warn("Missed WebSocket pong", {
@@ -204,6 +208,24 @@ export class HeartbeatMonitor {
       this.pongTimeout = null;
     }
     this.connection.recordHeartbeat();
+  }
+
+  /**
+   * Pause WS heartbeat pings while the plugin is executing a command.
+   * The plugin is single-threaded and cannot respond to pings during figma.* calls.
+   */
+  pauseWsHeartbeat(): void {
+    this.heartbeatPaused = true;
+  }
+
+  /**
+   * Resume WS heartbeat pings after command execution completes.
+   * Resets missed pong counter since the pause was intentional.
+   */
+  resumeWsHeartbeat(): void {
+    this.heartbeatPaused = false;
+    this.missedPongs = 0;
+    this.awaitingPong = false;
   }
 
   /** Record a WebSocket message. */

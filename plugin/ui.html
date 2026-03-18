@@ -1798,6 +1798,12 @@
       case "ws-disconnect":
         handleWsDisconnect();
         break;
+      case "session-loading":
+        hideSessionPicker();
+        chatMessages.innerHTML = "";
+        showHistoryLoading();
+        switchToChat();
+        break;
       case "show-session-picker":
         showSessionPicker();
         break;

@@ -319,6 +319,9 @@ async function handleSessionCreate(): Promise<void> {
 async function handleSessionSelect(sessionId: string): Promise<void> {
   if (!pollerRef) return;
 
+  // Immediately tell UI to show loading and switch to chat
+  figma.ui.postMessage({ type: "session-loading" });
+
   var fileKey = figma.fileKey || "unknown";
   var cacheKey = "rex-session-messages-" + fileKey + "-" + sessionId;
 

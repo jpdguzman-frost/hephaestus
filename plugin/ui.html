@@ -1015,6 +1015,21 @@
     flex-shrink: 0;
   }
 
+  .session-row-delete {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.2);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 0 0 8px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .session-row-delete:hover {
+    color: #EF4444;
+  }
+
   .session-row-summary {
     margin-top: 4px;
     font-family: "Plus Jakarta Sans", sans-serif;
@@ -2003,6 +2018,11 @@
         break;
       case "pending-chat":
         updateChatQueuePill(msg.count || 0);
+        break;
+      case "session-name-update":
+        if (msg.name && msg.name !== "New Session") {
+          updateSessionBar(msg.name);
+        }
         break;
       case "selection-changed":
         handleSelectionChanged(msg);
@@ -2993,6 +3013,17 @@
         time.className = "session-row-time";
         time.textContent = formatSessionTime(sess.lastMessageAt || sess.createdAt);
         top.appendChild(time);
+
+        var delBtn = document.createElement("button");
+        delBtn.className = "session-row-delete";
+        delBtn.textContent = "×";
+        delBtn.addEventListener("click", (function(sid) {
+          return function(e) {
+            e.stopPropagation();
+            parent.postMessage({ pluginMessage: { type: "session-delete", sessionId: sid } }, "*");
+          };
+        })(sess.sessionId));
+        top.appendChild(delBtn);
 
         row.appendChild(top);
 

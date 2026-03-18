@@ -817,6 +817,38 @@ export class RelayServer {
         return { messages: [], sessionName: "Session" };
       }
     });
+
+    // POST /session/delete — delete a session and its messages
+    app.post("/session/delete", {
+      preHandler: authHook,
+    }, async (req: FastifyRequest, _reply: FastifyReply) => {
+      const body = req.body as { sessionId?: string } | null;
+      const pluginSession = this.connection.session;
+      if (!body?.sessionId || !this._memoryStore || !pluginSession) {
+        return { error: "Missing sessionId or not connected" };
+      }
+      const ctx: MemoryContext = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name,
+      };
+      try {
+        // Delete session metadata and messages by sessionId query
+        const deleted = await this._memoryStore.forget(ctx, undefined, body.sessionId, "file");
+        // Clear active session if it was the deleted one
+        if (this._activeChatSession?.sessionId === body.sessionId) {
+          this._activeChatSession = null;
+        }
+        this.logger.info("Chat session deleted", { sessionId: body.sessionId, deleted });
+        return { status: "deleted", sessionId: body.sessionId, deleted };
+      } catch (err) {
+        this.logger.warn("Failed to delete session", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return { error: "Failed to delete session" };
+      }
+    });
   }
 
   // ─── Route Handlers ────────────────────────────────────────────────────
@@ -925,7 +957,7 @@ export class RelayServer {
       // Even with no commands, signal activity state so the plugin
       // can show forging animation when Claude is working
       if (this.isActive || chatResponses.length > 0 || this.pendingChatCount > 0) {
-        return { commands: [], activity: this.isActive, chatResponses, pendingChat: this.pendingChatCount };
+        return { commands: [], activity: this.isActive, chatResponses, pendingChat: this.pendingChatCount, sessionName: this._activeChatSession?.name ?? null };
       }
       reply.code(204);
       return undefined;
@@ -958,6 +990,7 @@ export class RelayServer {
       activity: this.isActive,
       chatResponses,
       pendingChat: this.pendingChatCount,
+      sessionName: this._activeChatSession?.name ?? null,
       queueDepth: remainingStats.pending + remainingStats.inFlight,
     };
   }

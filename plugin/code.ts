@@ -191,6 +191,10 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       handleSessionSelect(message.sessionId as string);
       return;
     }
+    if (message && message.type === "session-delete") {
+      handleSessionDelete(message.sessionId as string, poller);
+      return;
+    }
     if (message && message.type === "cache-chat-history") {
       var fileKey = figma.fileKey || "unknown";
       // Save per-session if a session is active, otherwise use flat key
@@ -361,6 +365,18 @@ async function handleSessionSelect(sessionId: string): Promise<void> {
     }
   } catch (e) {
     console.warn("Failed to select session:", e);
+  }
+}
+
+async function handleSessionDelete(sessionId: string, poller: Poller): Promise<void> {
+  try {
+    var resp = await poller.postAuthenticated("/session/delete", { sessionId: sessionId });
+    if (resp.status >= 200 && resp.status < 300) {
+      // Refresh the sessions list
+      fetchAndSendSessions(poller);
+    }
+  } catch (e) {
+    console.warn("Failed to delete session:", e);
   }
 }
 

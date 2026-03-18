@@ -351,6 +351,12 @@ export class Poller {
         var pendingChat = (data.pendingChat as number) || 0;
         figma.ui.postMessage({ type: "pending-chat", count: pendingChat });
 
+        // Forward session name updates to UI
+        var sessionName = data.sessionName as string | undefined;
+        if (sessionName) {
+          figma.ui.postMessage({ type: "session-name-update", name: sessionName });
+        }
+
         // Forward chat responses/chunks to UI
         var chatResponses = data.chatResponses as Array<{ id: string; message: string; isError?: boolean; _isChunk?: boolean; _done?: boolean }> | undefined;
         if (chatResponses && chatResponses.length > 0) {

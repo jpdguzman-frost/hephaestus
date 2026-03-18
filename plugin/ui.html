@@ -2973,6 +2973,22 @@
     parent.postMessage({ pluginMessage: { type: "session-create" } }, "*");
   });
 
+  // Session picker pill controls
+  document.getElementById("sp-pill-status").addEventListener("click", switchToStatus);
+  document.getElementById("sp-pill-talk").addEventListener("click", function() {
+    // Go back to chat if there's an active session with messages
+    if (activeSessionName && chatMessages.children.length > 0) {
+      hideSessionPicker();
+      switchToChat();
+    }
+    // Otherwise stay in picker — user needs to pick a session first
+  });
+  // History pill — already showing sessions, no action needed
+  // "View previous conversations" — sessions list already visible
+  document.getElementById("sp-view-all").addEventListener("click", function() {
+    // Future: load more sessions beyond the 3 shown
+  });
+
   function showDisconnectedOverlay(channel) {
     disconnectedChannelNum.textContent = channel || currentPort || "?";
     channelDisconnected.style.display = "flex";

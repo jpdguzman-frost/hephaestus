@@ -879,7 +879,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 32px;
-    overflow-y: auto;
+    overflow: hidden;
+    min-height: 0;
   }
 
   #sp-idle-text {
@@ -889,10 +890,14 @@
     color: #8C827A;
     text-align: center;
     line-height: 1.6;
+    flex-shrink: 0;
   }
 
   #sp-sessions-block {
     width: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   #new-session-btn {

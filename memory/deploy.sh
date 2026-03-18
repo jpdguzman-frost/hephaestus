@@ -9,8 +9,8 @@ DEST_USER="root"
 DEST_HOST="178.128.127.92"
 DEST_PORT="22443"
 DEST_DIR="/mnt/volume_sgp1_01/aux/rex"
-SSH_KEY="~/.ssh/id_ed25519"
-SSH_CMD="ssh -i ${SSH_KEY} -p ${DEST_PORT} ${DEST_USER}@${DEST_HOST}"
+SSH_KEY="~/.ssh/id_rsa"
+SSH_CMD="ssh -q -i ${SSH_KEY} -p ${DEST_PORT} ${DEST_USER}@${DEST_HOST}"
 
 # Colors
 RED='\033[0;31m'
@@ -38,7 +38,7 @@ echo -e "${GREEN}Done${NC}"
 echo ""
 echo -e "${YELLOW}[2/4] Syncing code to server...${NC}"
 rsync -avz --progress \
-  -e "ssh -i ${SSH_KEY} -p ${DEST_PORT}" \
+  -e "ssh -q -i ${SSH_KEY} -p ${DEST_PORT}" \
   --include='server.js' \
   --include='package.json' \
   --include='package-lock.json' \
@@ -49,7 +49,7 @@ rsync -avz --progress \
   --exclude='.env' \
   --exclude='node_modules' \
   --exclude='*' \
-  ${SRC_DIR}/ ${DEST_USER}@${DEST_HOST}:${DEST_DIR}/
+  "${SRC_DIR}/" ${DEST_USER}@${DEST_HOST}:${DEST_DIR}/
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}Code synced successfully${NC}"

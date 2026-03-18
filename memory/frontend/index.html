@@ -11,97 +11,124 @@
     b.href = root + '/';
     document.head.appendChild(b);
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="frontend/css/app.css">
 </head>
 <body>
   <div class="shell">
+    <!-- Grain overlay -->
+    <div class="grain" aria-hidden="true"></div>
+
     <header class="topbar">
       <div class="topbar-left">
-        <h1 class="logo">Rex Memory</h1>
+        <h1 class="logo">
+          <span class="logo-icon">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <rect x="1" y="1" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.5"/>
+              <circle cx="6.5" cy="7" r="1.5" fill="currentColor"/>
+              <circle cx="11.5" cy="7" r="1.5" fill="currentColor"/>
+              <path d="M5.5 11.5C6.5 13 11.5 13 12.5 11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </span>
+          Rex Memory
+        </h1>
         <nav class="nav">
-          <a href="#" class="nav-link active" data-view="overview">Overview</a>
-          <a href="#" class="nav-link" data-view="browse">Browse</a>
+          <a href="#" class="nav-link" data-view="overview">Overview</a>
+          <a href="#" class="nav-link active" data-view="browse">Browse</a>
           <a href="#" class="nav-link" data-view="cleanup">Cleanup</a>
         </nav>
       </div>
       <div class="topbar-right">
-        <span class="status" id="status">connecting...</span>
+        <span class="status" id="status">
+          <span class="status-dot"></span>
+          connecting...
+        </span>
       </div>
     </header>
 
     <main class="content">
       <!-- Overview -->
-      <section id="view-overview" class="view">
-        <div class="stats-grid" id="stats-grid"></div>
-        <h2>Recent Memories</h2>
-        <div id="recent-list" class="memory-list"></div>
+      <section id="view-overview" class="view hidden">
+        <div class="overview-inner">
+          <div class="stats-grid" id="stats-grid"></div>
+          <div class="section-header">
+            <h2>Recent Memories</h2>
+            <span class="section-count" id="recent-count"></span>
+          </div>
+          <div id="recent-list" class="memory-list"></div>
+        </div>
       </section>
 
       <!-- Browse -->
-      <section id="view-browse" class="view hidden">
-        <div class="filters">
-          <select id="filter-scope">
-            <option value="">All scopes</option>
-            <option value="team">Team</option>
-            <option value="file">File</option>
-            <option value="page">Page</option>
-            <option value="user">User</option>
-          </select>
-          <select id="filter-category">
-            <option value="">All categories</option>
-            <option value="decision">Decision</option>
-            <option value="convention">Convention</option>
-            <option value="context">Context</option>
-            <option value="rejection">Rejection</option>
-            <option value="relationship">Relationship</option>
-            <option value="preference">Preference</option>
-            <option value="correction">Correction</option>
-          </select>
-          <label class="checkbox-label">
-            <input type="checkbox" id="filter-superseded"> Show superseded
-          </label>
-          <button class="btn" id="btn-refresh">Refresh</button>
+      <section id="view-browse" class="view browse-layout">
+        <aside class="browse-sidebar">
+          <div class="sidebar-filters">
+            <div class="filter-row">
+              <select id="filter-file">
+              <option value="">All files</option>
+            </select>
+              <select id="filter-category">
+                <option value="">All categories</option>
+                <option value="context">Context</option>
+                <option value="decision">Decision</option>
+                <option value="convention">Convention</option>
+                <option value="rejection">Rejection</option>
+                <option value="relationship">Relationship</option>
+                <option value="preference">Preference</option>
+                <option value="correction">Correction</option>
+              </select>
+            </div>
+            <label class="checkbox-label">
+              <input type="checkbox" id="filter-superseded">
+              <span class="checkbox-custom"></span>
+              Superseded
+            </label>
+          </div>
+          <div class="sidebar-list" id="sidebar-list"></div>
+        </aside>
+        <div class="browse-detail" id="browse-detail">
+          <div class="detail-empty">
+            <div class="detail-empty-icon">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect x="4" y="4" width="40" height="40" rx="10" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+                <path d="M16 20h16M16 28h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+              </svg>
+            </div>
+            <p>Select a memory to view</p>
+          </div>
         </div>
-        <div id="browse-list" class="memory-list"></div>
       </section>
 
       <!-- Cleanup -->
       <section id="view-cleanup" class="view hidden">
-        <div class="cleanup-form">
-          <div class="form-row">
-            <label>Max age (days, 0 access):</label>
-            <input type="number" id="cleanup-age" value="30" min="1">
+        <div class="cleanup-inner">
+          <div class="section-header" style="margin-bottom:20px">
+            <h2>Cleanup</h2>
           </div>
-          <div class="form-row">
-            <label>Min confidence:</label>
-            <input type="number" id="cleanup-conf" value="0.2" min="0" max="1" step="0.1">
+          <div class="cleanup-form">
+            <div class="form-row">
+              <label>Max age (days, 0 access)</label>
+              <input type="number" id="cleanup-age" value="30" min="1">
+            </div>
+            <div class="form-row">
+              <label>Min confidence</label>
+              <input type="number" id="cleanup-conf" value="0.2" min="0" max="1" step="0.1">
+            </div>
+            <label class="checkbox-label">
+              <input type="checkbox" id="cleanup-superseded" checked>
+              <span class="checkbox-custom"></span>
+              Remove superseded
+            </label>
+            <div class="cleanup-actions">
+              <button class="btn" id="btn-preview">Preview</button>
+              <button class="btn btn-danger" id="btn-execute" disabled>Execute Cleanup</button>
+            </div>
           </div>
-          <label class="checkbox-label">
-            <input type="checkbox" id="cleanup-superseded" checked> Remove superseded
-          </label>
-          <div class="cleanup-actions">
-            <button class="btn" id="btn-preview">Preview</button>
-            <button class="btn btn-danger" id="btn-execute" disabled>Execute Cleanup</button>
-          </div>
+          <div id="cleanup-result" class="cleanup-result"></div>
         </div>
-        <div id="cleanup-result" class="cleanup-result"></div>
       </section>
-
-      <!-- Detail Modal -->
-      <div id="modal" class="modal hidden">
-        <div class="modal-backdrop"></div>
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3 id="modal-title">Memory Detail</h3>
-            <button class="modal-close" id="modal-close">&times;</button>
-          </div>
-          <div id="modal-body"></div>
-          <div class="modal-footer">
-            <button class="btn btn-danger" id="btn-delete">Delete</button>
-            <button class="btn" id="btn-save">Save</button>
-          </div>
-        </div>
-      </div>
     </main>
   </div>
 

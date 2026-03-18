@@ -188,7 +188,11 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       return;
     }
     if (message && message.type === "cache-chat-history") {
-      var cacheKey = "rex-chat-history-" + (figma.fileKey || "unknown");
+      var fileKey = figma.fileKey || "unknown";
+      // Save per-session if a session is active, otherwise use flat key
+      var cacheKey = currentSessionId
+        ? "rex-session-messages-" + fileKey + "-" + currentSessionId
+        : "rex-chat-history-" + fileKey;
       figma.clientStorage.setAsync(cacheKey, message.messages).catch(function() {});
       return;
     }
@@ -314,17 +318,43 @@ async function handleSessionCreate(): Promise<void> {
 
 async function handleSessionSelect(sessionId: string): Promise<void> {
   if (!pollerRef) return;
+
+  var fileKey = figma.fileKey || "unknown";
+  var cacheKey = "rex-session-messages-" + fileKey + "-" + sessionId;
+
+  // Phase 1: Instant render from local cache
+  try {
+    var cached = await figma.clientStorage.getAsync(cacheKey);
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      currentSessionId = sessionId;
+      currentSessionName = "Session";
+      figma.ui.postMessage({
+        type: "session-selected",
+        messages: cached,
+        sessionName: currentSessionName,
+        source: "cache",
+      });
+    }
+  } catch (e) { /* ignore */ }
+
+  // Phase 2: Fetch remote (authoritative, replaces cache render)
   try {
     var resp = await pollerRef.postAuthenticated("/session/select", { sessionId: sessionId });
     if (resp.status >= 200 && resp.status < 300 && resp.body) {
       var data = JSON.parse(resp.body);
       currentSessionId = sessionId;
       currentSessionName = data.sessionName || "Session";
+      var messages = data.messages || [];
       figma.ui.postMessage({
         type: "session-selected",
-        messages: data.messages || [],
+        messages: messages,
         sessionName: currentSessionName,
+        source: "remote",
       });
+      // Update local cache
+      try {
+        await figma.clientStorage.setAsync(cacheKey, messages.slice(-50));
+      } catch (e) { /* non-critical */ }
     }
   } catch (e) {
     console.warn("Failed to select session:", e);

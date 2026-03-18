@@ -1808,7 +1808,7 @@
         onSessionCreated(msg.session);
         break;
       case "session-selected":
-        onSessionSelected(msg.messages, msg.sessionName);
+        onSessionSelected(msg.messages, msg.sessionName, msg.source);
         break;
       case "chat-history":
         renderChatHistory(msg.messages, msg.source);
@@ -2413,7 +2413,7 @@
         entries.push({ role: role, message: text, timestamp: Date.now() });
       }
       if (entries.length > 0) {
-        parent.postMessage({ pluginMessage: { type: "cache-chat-history", messages: entries } }, "*");
+        parent.postMessage({ pluginMessage: { type: "cache-chat-history", messages: entries, sessionBased: true } }, "*");
       }
     }, 2000);
   }
@@ -2779,13 +2779,21 @@
     switchToChat();
   }
 
-  function onSessionSelected(messages, sessionName) {
+  function onSessionSelected(messages, sessionName, source) {
     hideSessionPicker();
     activeSessionName = sessionName || "Session";
-    // Render history then switch to chat
-    chatMessages.innerHTML = "";
-    if (messages && messages.length > 0) {
-      renderChatHistory(messages, "remote");
+
+    if (source === "cache") {
+      // Phase 1: instant render from cache — only if chat is empty
+      if (chatMessages.children.length === 0 && messages && messages.length > 0) {
+        renderChatHistory(messages, "cache");
+      }
+    } else {
+      // Phase 2: remote (authoritative) — clear and re-render
+      chatMessages.innerHTML = "";
+      if (messages && messages.length > 0) {
+        renderChatHistory(messages, "remote");
+      }
     }
     switchToChat();
   }

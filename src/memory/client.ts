@@ -252,8 +252,14 @@ export class MemoryServiceClient {
     const connected = await this.ensureConnected();
     if (!connected) return [];
 
-    // Use list and filter by chat-session tag client-side
-    const entries = await this.list(context, "file", "context", limit * 5);
+    // Use recall with "chat-session" query — this text-searches content/tags
+    const entries = await this.recall({
+      query: "chat-session",
+      scope: "file",
+      category: "context",
+      context,
+      limit: limit * 5,
+    });
 
     // Deduplicate by sessionId — pick the entry with the latest lastMessageAt
     const sessionMap = new Map<string, ChatSession>();
@@ -298,9 +304,14 @@ export class MemoryServiceClient {
     const connected = await this.ensureConnected();
     if (!connected) return [];
 
-    // Use list with a generous limit and filter by sessionId tag client-side
-    // (recall uses text search which may not reliably match sessionId in tags)
-    const entries = await this.list(context, "file", "context", limit * 3);
+    // Use recall with sessionId as query — matches content containing the sessionId
+    const entries = await this.recall({
+      query: sessionId,
+      scope: "file",
+      category: "context",
+      context,
+      limit: limit * 3,
+    });
 
     const messages: ChatHistoryEntry[] = [];
     for (const entry of entries) {

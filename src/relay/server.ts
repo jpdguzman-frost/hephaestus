@@ -35,7 +35,7 @@ interface PollingState {
 
 // ─── Relay Server ───────────────────────────────────────────────────────────
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 export class RelayServer {
   private readonly config: Config;

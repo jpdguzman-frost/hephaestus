@@ -15,7 +15,7 @@ NC='\033[0m'
 
 echo ""
 echo -e "${GOLD}╔══════════════════════════════════════╗${NC}"
-echo -e "${GOLD}║          Rex Installer v0.2          ║${NC}"
+echo -e "${GOLD}║          Rex Installer v0.3          ║${NC}"
 echo -e "${GOLD}╚══════════════════════════════════════╝${NC}"
 echo ""
 

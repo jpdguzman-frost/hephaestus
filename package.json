@@ -1,6 +1,6 @@
 {
   "name": "rex-figma",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A stable, reliable MCP server for full read/write access to Figma's canvas",
   "type": "module",
   "main": "dist/index.js",

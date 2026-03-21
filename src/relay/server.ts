@@ -74,8 +74,8 @@ export class RelayServer {
   private readonly memoryConfig: MemoryConfig;
   private _memoryStore: MemoryServiceClient | null = null;
 
-  // Osiris client for refinement observations
-  private readonly osirisClient: OsirisClient;
+  // Osiris client for refinement observations and pattern queries
+  private readonly _osirisClient: OsirisClient;
 
   // Stream accumulator for persisting complete streaming responses
   private streamAccumulator: Map<string, string> = new Map();
@@ -121,6 +121,11 @@ export class RelayServer {
     return this._memoryStore;
   }
 
+  /** Access the Osiris client for pattern queries. */
+  get osiris(): OsirisClient {
+    return this._osirisClient;
+  }
+
 
   constructor(config: Config, logger: Logger) {
     this.config = config;
@@ -143,7 +148,7 @@ export class RelayServer {
 
     // Initialize Osiris client for refinement observations
     const osirisUrl = process.env.OSIRIS_URL || "https://aux.frostdesigngroup.com/osiris";
-    this.osirisClient = new OsirisClient(osirisUrl, this.logger);
+    this._osirisClient = new OsirisClient(osirisUrl, this.logger);
 
     this.wireQueueEvents();
   }
@@ -693,7 +698,7 @@ export class RelayServer {
       };
 
       // Forward to Osiris (fire-and-forget)
-      this.osirisClient.saveRefinementRecord(record).catch((err) => {
+      this._osirisClient.saveRefinementRecord(record).catch((err) => {
         this.logger.warn("Failed to forward refinement record", {
           error: err instanceof Error ? err.message : String(err),
         });

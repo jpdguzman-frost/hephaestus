@@ -971,6 +971,171 @@ export async function routeToolCall(
  * 3. Wait for the result from the plugin
  * 4. Extract and return the result data
  */
+// ─── Pattern Enrichment ─────────────────────────────────────────────────────
+
+/** Properties that should never be overridden by patterns (layout is contextual). */
+const SKIP_PATTERN_PROPERTIES = new Set(["x", "y", "width", "height"]);
+
+/** Map pattern property names to create_node param paths. */
+function applyPatternValue(params: Record<string, unknown>, property: string, value: unknown): boolean {
+  if (SKIP_PATTERN_PROPERTIES.has(property)) return false;
+
+  // Direct top-level properties
+  if (["cornerRadius", "opacity", "strokeWeight"].includes(property)) {
+    if (params[property] === undefined) { params[property] = value; return true; }
+    return false;
+  }
+
+  // Fill color
+  if (property === "fills" && typeof value === "string" && value.startsWith("#")) {
+    if (params.fills === undefined) {
+      params.fills = [{ type: "solid", color: value }];
+      return true;
+    }
+    return false;
+  }
+
+  // Text style properties
+  if (["fontSize", "fontName"].includes(property)) {
+    const ts = (params.textStyle || {}) as Record<string, unknown>;
+    if (property === "fontSize" && ts.fontSize === undefined) {
+      ts.fontSize = value; params.textStyle = ts; return true;
+    }
+    if (property === "fontName" && typeof value === "string") {
+      const parts = value.split(" ");
+      const style = parts.pop() || "Regular";
+      const family = parts.join(" ") || "Inter";
+      if (ts.fontFamily === undefined) {
+        ts.fontFamily = family;
+        ts.fontWeight = fontWeightFromStyle(style);
+        params.textStyle = ts;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Auto-layout properties
+  if (["paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "itemSpacing"].includes(property)) {
+    const al = (params.autoLayout || {}) as Record<string, unknown>;
+    if (property === "itemSpacing" && al.spacing === undefined) {
+      al.spacing = value; params.autoLayout = al; return true;
+    }
+    if (property.startsWith("padding")) {
+      const padding = al.padding as Record<string, unknown> | number | undefined;
+      if (padding === undefined) {
+        // Initialize padding object
+        al.padding = { top: 0, right: 0, bottom: 0, left: 0 };
+      }
+      if (typeof al.padding === "object" && al.padding !== null) {
+        const side = property.replace("padding", "").toLowerCase();
+        const p = al.padding as Record<string, unknown>;
+        if (p[side] === undefined || p[side] === 0) { p[side] = value; params.autoLayout = al; return true; }
+      }
+    }
+    return false;
+  }
+
+  // Boolean properties
+  if (property === "clipsContent") {
+    if (params.clipsContent === undefined) { params.clipsContent = value; return true; }
+    return false;
+  }
+
+  return false;
+}
+
+function fontWeightFromStyle(style: string): number {
+  const map: Record<string, number> = {
+    "Thin": 100, "ExtraLight": 200, "Light": 300, "Regular": 400,
+    "Medium": 500, "Semi Bold": 600, "SemiBold": 600, "Bold": 700,
+    "ExtraBold": 800, "Black": 900,
+  };
+  return map[style] || 400;
+}
+
+/**
+ * Enrich create_node params with learned patterns from Osiris.
+ * Patterns are applied as defaults — they only fill in values that
+ * Claude didn't explicitly provide.
+ */
+async function enrichWithPatterns(
+  params: Record<string, unknown>,
+  context: ToolContext,
+): Promise<Record<string, unknown>> {
+  const somRole = params.somRole as string | undefined;
+  if (!somRole) {
+    // Still recurse into children that might have somRole
+    await enrichChildren(params, context);
+    return params;
+  }
+
+  // Get brandId from the connected Figma file context
+  const session = context.relay.connection.session;
+  if (!session) return params;
+
+  // Derive brandId from fileName (convention: "Brand — Screen Name" or similar)
+  // For now, we check if there's a brandId passed in the params or use a default
+  const brandId = params.brandId as string | undefined;
+  if (!brandId) {
+    await enrichChildren(params, context);
+    return params;
+  }
+
+  try {
+    // Fetch patterns — confirmed first, then candidates
+    const patterns = await context.relay.osiris.getPatterns({ brandId, role: somRole });
+
+    if (patterns.length === 0) {
+      await enrichChildren(params, context);
+      return params;
+    }
+
+    // Group by property, preferring confirmed over candidate
+    const byProperty = new Map<string, { modeValue: unknown; status: string }>();
+    for (const p of patterns) {
+      if (p.status !== "candidate" && p.status !== "confirmed") continue;
+      const existing = byProperty.get(p.property);
+      if (!existing || (p.status === "confirmed" && existing.status !== "confirmed")) {
+        byProperty.set(p.property, { modeValue: p.modeValue, status: p.status });
+      }
+    }
+
+    // Apply patterns as defaults
+    const applied: string[] = [];
+    for (const [property, { modeValue }] of byProperty) {
+      if (applyPatternValue(params, property, modeValue)) {
+        applied.push(property);
+      }
+    }
+
+    if (applied.length > 0) {
+      context.logger.info("Patterns applied", {
+        role: somRole,
+        brandId,
+        applied,
+        count: applied.length,
+      });
+    }
+  } catch (err) {
+    context.logger.warn("Pattern enrichment failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Recurse into children
+  await enrichChildren(params, context);
+  return params;
+}
+
+async function enrichChildren(params: Record<string, unknown>, context: ToolContext): Promise<void> {
+  const children = params.children as Array<Record<string, unknown>> | undefined;
+  if (!children) return;
+  for (let i = 0; i < children.length; i++) {
+    children[i] = await enrichWithPatterns(children[i], context);
+  }
+}
+
 async function handlePluginTool(
   toolName: string,
   params: Record<string, unknown>,
@@ -988,6 +1153,11 @@ async function handlePluginTool(
   // Special handling for batch_execute: execute each operation as a sub-command
   if (toolName === "batch_execute") {
     return handleBatchExecute(params, context);
+  }
+
+  // Pattern enrichment for create_node — apply learned patterns as defaults
+  if (route.commandType === CommandType.CREATE_NODE) {
+    params = await enrichWithPatterns(params, context);
   }
 
   const result = await context.enqueueCommand(route.commandType, params);

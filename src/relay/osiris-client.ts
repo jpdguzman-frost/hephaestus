@@ -1,5 +1,5 @@
 // ─── Osiris HTTP Client ──────────────────────────────────────────────────────
-// Forwards refinement observations from the Rex relay to Osiris for storage.
+// Forwards refinement observations and queries property patterns from Osiris.
 
 import type { Logger } from "../shared/logger.js";
 
@@ -31,6 +31,24 @@ export class OsirisClient {
   constructor(baseUrl: string, logger: Logger) {
     this.baseUrl = baseUrl;
     this.logger = logger;
+  }
+
+  async getPatterns(query: { brandId?: string; role?: string; status?: string }): Promise<Array<{ role: string; property: string; modeValue: unknown; status: string; consistency: number; occurrences: number }>> {
+    try {
+      const params = new URLSearchParams();
+      if (query.brandId) params.set("brandId", query.brandId);
+      if (query.role) params.set("role", query.role);
+      if (query.status) params.set("status", query.status);
+      const resp = await fetch(this.baseUrl + "/api/property-patterns?" + params.toString());
+      if (!resp.ok) return [];
+      const data = await resp.json() as { patterns?: unknown[] };
+      return (data.patterns || []) as Array<{ role: string; property: string; modeValue: unknown; status: string; consistency: number; occurrences: number }>;
+    } catch (err) {
+      this.logger.warn("Osiris pattern fetch failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return [];
+    }
   }
 
   async saveRefinementRecord(record: RefinementRecord): Promise<void> {

@@ -363,7 +363,7 @@ export class Store {
 
   async stats() {
     const pipeline = [
-      { $match: { supersededBy: { $exists: false } } },
+      { $match: { supersededBy: { $exists: false }, tags: { $nin: ['chat-session', 'chat-message', 'chat-history'] } } },
       {
         $group: {
           _id: { scope: '$scope', category: '$category' },

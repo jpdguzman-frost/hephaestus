@@ -97,6 +97,12 @@ async function loadOverview() {
     const stats = await api.stats();
     const grid = document.getElementById('stats-grid');
 
+    // Filter out undefined/null scopes and build category stats
+    const scopes = Object.entries(stats.byScope || {})
+      .filter(([scope]) => scope && scope !== 'undefined' && scope !== 'null');
+    const categories = Object.entries(stats.byCategory || {})
+      .filter(([cat]) => cat && cat !== 'undefined' && cat !== 'null');
+
     grid.innerHTML = `
       <div class="stat-card">
         <div class="stat-value">${stats.total}</div>
@@ -106,15 +112,21 @@ async function loadOverview() {
         <div class="stat-value">${stats.avgConfidence}</div>
         <div class="stat-label">Avg Confidence</div>
       </div>
-      ${Object.entries(stats.byScope || {}).map(([scope, count]) => `
+      ${scopes.map(([scope, count]) => `
         <div class="stat-card">
           <div class="stat-value">${count}</div>
-          <div class="stat-label">${scope}</div>
+          <div class="stat-label">${esc(scope)}</div>
+        </div>
+      `).join('')}
+      ${categories.map(([cat, count]) => `
+        <div class="stat-card">
+          <div class="stat-value">${count}</div>
+          <div class="stat-label">${esc(cat)}</div>
         </div>
       `).join('')}
     `;
 
-    const result = await api.list({ context: {}, limit: 10 });
+    const result = await api.list({ context: {}, limit: 10, excludeTags: ['chat-session', 'chat-message', 'chat-history'] });
     const countEl = document.getElementById('recent-count');
     if (countEl) countEl.textContent = result.count ? `(${result.count})` : '';
     renderOverviewList(result.memories);
@@ -131,7 +143,7 @@ function renderOverviewList(memories) {
   }
   container.innerHTML = memories.map((m, i) => `
     <div class="memory-row" data-id="${m.id}" style="animation-delay:${i * 30}ms">
-      <span class="badge badge-scope">${esc(m.scope)}</span>
+      ${m.scope ? `<span class="badge badge-scope">${esc(m.scope)}</span>` : '<span></span>'}
       <span class="badge ${badgeClass(m.category)}">${esc(m.category)}</span>
       <span class="row-title">${esc(extractTitle(m.content))}</span>
       <span class="row-meta">${(m.confidence || 0).toFixed(2)}</span>

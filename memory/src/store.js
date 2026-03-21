@@ -149,7 +149,7 @@ export class Store {
   // ─── List ───────────────────────────────────────────────────────────────────
 
   async list(input) {
-    const { scope, category, context, limit, skip, includeSuperseded } = input;
+    const { scope, category, context, limit, skip, includeSuperseded, excludeTags } = input;
 
     const filter = {};
 
@@ -164,6 +164,7 @@ export class Store {
 
     if (category) filter.category = category;
     if (!includeSuperseded) filter.supersededBy = { $exists: false };
+    if (excludeTags && excludeTags.length) filter.tags = { $nin: excludeTags };
 
     const total = await this.memories.countDocuments(filter);
     const items = await this.memories
@@ -178,13 +179,50 @@ export class Store {
 
   // ─── Distinct Files ────────────────────────────────────────────────────────
 
-  async distinctFiles() {
+  async distinctFiles(excludeTags) {
+    const match = { fileKey: { $exists: true, $ne: null } };
+    if (excludeTags && excludeTags.length) match.tags = { $nin: excludeTags };
     return this.memories.aggregate([
-      { $match: { fileKey: { $exists: true, $ne: null } } },
+      { $match: match },
       { $group: { _id: '$fileKey', fileName: { $first: '$fileName' }, count: { $sum: 1 } } },
       { $sort: { fileName: 1 } },
       { $project: { _id: 0, fileKey: '$_id', fileName: 1, count: 1 } },
     ]).toArray();
+  }
+
+  // ─── Chat Sessions ─────────────────────────────────────────────────────────
+
+  async listChatSessions({ fileKey, limit, skip } = {}) {
+    const match = { tags: 'chat-session' };
+    if (fileKey) match.fileKey = fileKey;
+
+    const pipeline = [
+      { $match: match },
+      { $sort: { updatedAt: -1 } },
+      { $group: {
+        _id: { $arrayElemAt: ['$tags', 1] },
+        doc: { $first: '$$ROOT' },
+      }},
+      { $replaceRoot: { newRoot: '$doc' } },
+      { $sort: { updatedAt: -1 } },
+      { $facet: {
+        items: [{ $skip: skip || 0 }, { $limit: limit || 50 }],
+        total: [{ $count: 'n' }],
+      }},
+    ];
+
+    const [result] = await this.memories.aggregate(pipeline).toArray();
+    return {
+      items: result.items || [],
+      total: result.total[0]?.n || 0,
+    };
+  }
+
+  async listChatMessages({ sessionId }) {
+    return this.memories
+      .find({ tags: { $all: ['chat-message', sessionId] } })
+      .sort({ createdAt: 1 })
+      .toArray();
   }
 
   // ─── Load for Session ───────────────────────────────────────────────────────

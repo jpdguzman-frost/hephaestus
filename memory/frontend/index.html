@@ -38,6 +38,7 @@
           <a href="#" class="nav-link" data-view="overview">Overview</a>
           <a href="#" class="nav-link active" data-view="browse">Browse</a>
           <a href="#" class="nav-link" data-view="cleanup">Cleanup</a>
+          <a href="#" class="nav-link" data-view="chat">Chat History</a>
         </nav>
       </div>
       <div class="topbar-right">
@@ -127,6 +128,30 @@
             </div>
           </div>
           <div id="cleanup-result" class="cleanup-result"></div>
+        </div>
+      </section>
+      <!-- Chat History -->
+      <section id="view-chat" class="view hidden chat-layout">
+        <aside class="chat-sidebar">
+          <div class="sidebar-filters">
+            <div class="filter-row">
+              <select id="chat-filter-file">
+                <option value="">All files</option>
+              </select>
+            </div>
+          </div>
+          <div class="chat-session-list" id="chat-session-list"></div>
+        </aside>
+        <div class="chat-detail" id="chat-detail">
+          <div class="detail-empty">
+            <div class="detail-empty-icon">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <path d="M8 12a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v16a6 6 0 0 1-6 6H18l-8 6V12z" stroke="currentColor" stroke-width="1.5" opacity="0.3"/>
+                <path d="M16 18h16M16 24h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+              </svg>
+            </div>
+            <p>Select a conversation to view</p>
+          </div>
         </div>
       </section>
     </main>

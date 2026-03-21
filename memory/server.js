@@ -84,8 +84,31 @@ router.post('/api/memories/list', async (req, res) => {
 
 router.get('/api/memories/files', async (req, res) => {
   try {
-    const files = await store.distinctFiles();
+    const excludeTags = req.query.excludeChat === 'true'
+      ? ['chat-session', 'chat-message', 'chat-history']
+      : undefined;
+    const files = await store.distinctFiles(excludeTags);
     res.json({ files });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Chat Sessions ──────────────────────────────────────────────────────────
+
+router.post('/api/chat/sessions', async (req, res) => {
+  try {
+    const { items, total } = await store.listChatSessions(req.body);
+    res.json({ sessions: formatList(items), count: items.length, total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/chat/sessions/:sessionId/messages', async (req, res) => {
+  try {
+    const messages = await store.listChatMessages({ sessionId: req.params.sessionId });
+    res.json({ messages: formatList(messages), count: messages.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -51,7 +51,9 @@ const api = {
   updateMemory: (id, data) => api.patch('/api/memories/' + id, data),
   deleteMemory: (id) => api.del('/api/memories/' + id),
   cleanup: (opts) => api.post('/api/memories/cleanup', opts),
-  files: () => api.get('/api/memories/files'),
+  files: (excludeChat) => api.get('/api/memories/files' + (excludeChat ? '?excludeChat=true' : '')),
+  chatSessions: (opts) => api.post('/api/chat/sessions', opts),
+  chatMessages: (sid) => api.get('/api/chat/sessions/' + encodeURIComponent(sid) + '/messages'),
 };
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -60,6 +62,12 @@ let currentView = 'browse';
 let selectedMemoryId = null;
 let sidebarMemories = [];
 let isEditing = false;
+
+// Chat state
+let chatSessions = [];
+let chatSessionsTotal = 0;
+let chatSessionsLoading = false;
+let selectedChatSessionId = null;
 
 // ─── Navigation ─────────────────────────────────────────────────────────────
 
@@ -79,6 +87,7 @@ function switchView(view) {
 
   if (view === 'overview') loadOverview();
   if (view === 'browse') loadSidebar();
+  if (view === 'chat') loadChatSessions(true);
 }
 
 // ─── Overview ───────────────────────────────────────────────────────────────
@@ -168,6 +177,7 @@ async function loadSidebar(reset = false) {
       limit: PAGE_SIZE,
       skip: sidebarMemories.length,
       includeSuperseded: filterSuperseded.checked,
+      excludeTags: ['chat-session', 'chat-message', 'chat-history'],
     };
     if (filterCategory.value) opts.category = filterCategory.value;
     if (filterFile.value) {
@@ -202,7 +212,7 @@ document.getElementById('sidebar-list').addEventListener('scroll', (e) => {
 async function populateFileFilter() {
   const current = filterFile.value;
   try {
-    const { files } = await api.files();
+    const { files } = await api.files(true);
     filterFile.innerHTML = '<option value="">All files</option>' +
       files.map(f =>
         `<option value="${esc(f.fileKey)}">${esc(f.fileName || f.fileKey)} (${f.count})</option>`
@@ -386,6 +396,189 @@ function enterEditMode(panel, memory) {
     isEditing = false;
     renderDetail(panel, memory);
   });
+}
+
+// ─── Chat History ───────────────────────────────────────────────────────────
+
+const chatFilterFile = document.getElementById('chat-filter-file');
+chatFilterFile.addEventListener('change', () => loadChatSessions(true));
+
+document.getElementById('chat-session-list').addEventListener('scroll', (e) => {
+  const el = e.target;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+    loadChatSessions();
+  }
+});
+
+async function loadChatSessions(reset = false) {
+  if (chatSessionsLoading) return;
+  if (reset) {
+    chatSessions = [];
+    chatSessionsTotal = 0;
+    selectedChatSessionId = null;
+    document.getElementById('chat-detail').innerHTML =
+      '<div class="detail-empty"><div class="detail-empty-icon"><svg width="48" height="48" viewBox="0 0 48 48" fill="none"><path d="M8 12a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v16a6 6 0 0 1-6 6H18l-8 6V12z" stroke="currentColor" stroke-width="1.5" opacity="0.3"/><path d="M16 18h16M16 24h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/></svg></div><p>Select a conversation to view</p></div>';
+  }
+  if (!reset && chatSessions.length >= chatSessionsTotal && chatSessionsTotal > 0) return;
+
+  chatSessionsLoading = true;
+  try {
+    const opts = { limit: PAGE_SIZE, skip: chatSessions.length };
+    if (chatFilterFile.value) opts.fileKey = chatFilterFile.value;
+
+    const result = await api.chatSessions(opts);
+    const batch = result.sessions || [];
+    chatSessionsTotal = result.total || 0;
+    chatSessions = chatSessions.concat(batch);
+
+    if (chatSessions.length === batch.length && !chatFilterFile.value) {
+      populateChatFileFilter();
+    }
+    renderChatSessions(reset);
+  } catch (err) {
+    console.error('Failed to load chat sessions:', err);
+  } finally {
+    chatSessionsLoading = false;
+  }
+}
+
+async function populateChatFileFilter() {
+  const current = chatFilterFile.value;
+  try {
+    const { files } = await api.files(false);
+    chatFilterFile.innerHTML = '<option value="">All files</option>' +
+      files.map(f =>
+        `<option value="${esc(f.fileKey)}">${esc(f.fileName || f.fileKey)}</option>`
+      ).join('');
+    if (current && files.some(f => f.fileKey === current)) {
+      chatFilterFile.value = current;
+    }
+  } catch (err) {
+    console.error('Failed to load chat file filter:', err);
+  }
+}
+
+function renderChatSessions(reset = false) {
+  const container = document.getElementById('chat-session-list');
+
+  if (chatSessions.length === 0) {
+    container.innerHTML = '<div class="empty">No conversations found</div>';
+    return;
+  }
+
+  if (reset) container.innerHTML = '';
+
+  const existingLoader = container.querySelector('.sidebar-loader');
+  if (existingLoader) existingLoader.remove();
+
+  const existingCount = container.querySelectorAll('.sidebar-card').length;
+  const newItems = chatSessions.slice(existingCount);
+
+  const fragment = document.createDocumentFragment();
+  for (const s of newItems) {
+    const parsed = parseSessionContent(s);
+    const div = document.createElement('div');
+    const isSelected = parsed.sessionId === selectedChatSessionId;
+    div.className = `sidebar-card${isSelected ? ' selected' : ''}`;
+    div.dataset.sessionId = parsed.sessionId;
+    div.innerHTML = `
+      <div class="card-top">
+        <span class="chat-card-name">${esc(parsed.name || 'Untitled Session')}</span>
+        <span class="card-age">${timeAgo(s.updatedAt || parsed.lastMessageAt)}</span>
+      </div>
+      <div class="chat-card-file">${esc(s.fileName || s.fileKey || '')}</div>
+      <div class="card-footer">
+        <span class="chat-card-count">${parsed.messageCount || 0} messages</span>
+      </div>
+    `;
+    div.addEventListener('click', () => selectChatSession(parsed.sessionId, s));
+    fragment.appendChild(div);
+  }
+  container.appendChild(fragment);
+
+  if (chatSessions.length < chatSessionsTotal) {
+    const loader = document.createElement('div');
+    loader.className = 'sidebar-loader';
+    loader.textContent = `${chatSessions.length} of ${chatSessionsTotal} — scroll for more`;
+    container.appendChild(loader);
+  }
+}
+
+function parseSessionContent(entry) {
+  try {
+    return JSON.parse(entry.content);
+  } catch {
+    return { sessionId: '', name: 'Unknown', messageCount: 0 };
+  }
+}
+
+async function selectChatSession(sessionId, sessionEntry) {
+  selectedChatSessionId = sessionId;
+
+  // Update sidebar selection
+  document.querySelectorAll('#chat-session-list .sidebar-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.sessionId === sessionId);
+  });
+
+  const panel = document.getElementById('chat-detail');
+  panel.innerHTML = '<div class="detail-empty"><p>Loading messages...</p></div>';
+
+  try {
+    const { messages } = await api.chatMessages(sessionId);
+    const parsed = parseSessionContent(sessionEntry);
+    renderChatThread(panel, parsed, sessionEntry, messages);
+  } catch (err) {
+    panel.innerHTML = '<div class="detail-empty"><p>Failed to load messages</p></div>';
+    console.error(err);
+  }
+}
+
+function renderChatThread(panel, session, sessionEntry, rawMessages) {
+  const messages = rawMessages.map(m => {
+    try {
+      const p = JSON.parse(m.content);
+      return { ...p, _createdAt: m.createdAt };
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+
+  messages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+  const duration = messages.length >= 2
+    ? timeAgo(new Date(messages[0].timestamp))
+    : '';
+
+  panel.innerHTML = `
+    <div class="chat-thread-header">
+      <div class="chat-thread-title">${esc(session.name || 'Untitled Session')}</div>
+      <div class="chat-thread-meta">
+        ${esc(sessionEntry.fileName || sessionEntry.fileKey || '')}
+        ${session.messageCount ? ' \u00B7 ' + session.messageCount + ' messages' : ''}
+        ${duration ? ' \u00B7 started ' + duration : ''}
+      </div>
+    </div>
+    <div class="chat-thread">
+      ${messages.map((m, i) => `
+        <div class="chat-bubble chat-bubble-${m.role === 'user' ? 'user' : 'assistant'}" style="animation-delay:${Math.min(i * 30, 600)}ms">
+          <div class="chat-bubble-role">${m.role === 'user' ? 'YOU' : 'REX'}</div>
+          <div class="chat-bubble-content">${m.role === 'assistant' ? renderMarkdown(m.message) : esc(m.message)}</div>
+          <div class="chat-bubble-time">${m.timestamp ? fmtTime(m.timestamp) : ''}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Scroll to bottom
+  requestAnimationFrame(() => {
+    panel.scrollTop = panel.scrollHeight;
+  });
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+    ' \u00B7 ' + d.toLocaleDateString();
 }
 
 // ─── Cleanup ────────────────────────────────────────────────────────────────

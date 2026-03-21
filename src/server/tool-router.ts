@@ -976,41 +976,40 @@ export async function routeToolCall(
 /** Properties that should never be overridden by patterns (layout is contextual). */
 const SKIP_PATTERN_PROPERTIES = new Set(["x", "y", "width", "height"]);
 
-/** Map pattern property names to create_node param paths. */
+/**
+ * Apply a pattern value to create_node params.
+ * Patterns ALWAYS override — they represent learned designer preferences
+ * that should take priority over Claude's generic defaults.
+ */
 function applyPatternValue(params: Record<string, unknown>, property: string, value: unknown): boolean {
   if (SKIP_PATTERN_PROPERTIES.has(property)) return false;
 
   // Direct top-level properties
   if (["cornerRadius", "opacity", "strokeWeight"].includes(property)) {
-    if (params[property] === undefined) { params[property] = value; return true; }
-    return false;
+    params[property] = value;
+    return true;
   }
 
   // Fill color
   if (property === "fills" && typeof value === "string" && value.startsWith("#")) {
-    if (params.fills === undefined) {
-      params.fills = [{ type: "solid", color: value }];
-      return true;
-    }
-    return false;
+    params.fills = [{ type: "solid", color: value }];
+    return true;
   }
 
   // Text style properties
   if (["fontSize", "fontName"].includes(property)) {
     const ts = (params.textStyle || {}) as Record<string, unknown>;
-    if (property === "fontSize" && ts.fontSize === undefined) {
+    if (property === "fontSize") {
       ts.fontSize = value; params.textStyle = ts; return true;
     }
     if (property === "fontName" && typeof value === "string") {
       const parts = value.split(" ");
       const style = parts.pop() || "Regular";
       const family = parts.join(" ") || "Inter";
-      if (ts.fontFamily === undefined) {
-        ts.fontFamily = family;
-        ts.fontWeight = fontWeightFromStyle(style);
-        params.textStyle = ts;
-        return true;
-      }
+      ts.fontFamily = family;
+      ts.fontWeight = fontWeightFromStyle(style);
+      params.textStyle = ts;
+      return true;
     }
     return false;
   }
@@ -1018,28 +1017,29 @@ function applyPatternValue(params: Record<string, unknown>, property: string, va
   // Auto-layout properties
   if (["paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "itemSpacing"].includes(property)) {
     const al = (params.autoLayout || {}) as Record<string, unknown>;
-    if (property === "itemSpacing" && al.spacing === undefined) {
+    if (property === "itemSpacing") {
       al.spacing = value; params.autoLayout = al; return true;
     }
     if (property.startsWith("padding")) {
-      const padding = al.padding as Record<string, unknown> | number | undefined;
-      if (padding === undefined) {
-        // Initialize padding object
+      // Expand uniform padding to object if needed
+      if (typeof al.padding === "number") {
+        const v = al.padding;
+        al.padding = { top: v, right: v, bottom: v, left: v };
+      } else if (al.padding === undefined) {
         al.padding = { top: 0, right: 0, bottom: 0, left: 0 };
       }
-      if (typeof al.padding === "object" && al.padding !== null) {
-        const side = property.replace("padding", "").toLowerCase();
-        const p = al.padding as Record<string, unknown>;
-        if (p[side] === undefined || p[side] === 0) { p[side] = value; params.autoLayout = al; return true; }
-      }
+      const side = property.replace("padding", "").toLowerCase();
+      (al.padding as Record<string, unknown>)[side] = value;
+      params.autoLayout = al;
+      return true;
     }
     return false;
   }
 
   // Boolean properties
   if (property === "clipsContent") {
-    if (params.clipsContent === undefined) { params.clipsContent = value; return true; }
-    return false;
+    params.clipsContent = value;
+    return true;
   }
 
   return false;
@@ -1070,34 +1070,39 @@ async function enrichWithPatterns(
     return params;
   }
 
-  // Get brandId from the connected Figma file context
-  const session = context.relay.connection.session;
-  if (!session) return params;
-
-  // Derive brandId from fileName (convention: "Brand — Screen Name" or similar)
-  // For now, we check if there's a brandId passed in the params or use a default
+  // brandId is optional — same-brand patterns get priority, cross-brand as fallback
   const brandId = params.brandId as string | undefined;
-  if (!brandId) {
-    await enrichChildren(params, context);
-    return params;
-  }
 
   try {
-    // Fetch patterns — confirmed first, then candidates
-    const patterns = await context.relay.osiris.getPatterns({ brandId, role: somRole });
+    // Fetch all patterns for this role (no brand filter)
+    const allPatterns = await context.relay.osiris.getPatterns({ role: somRole });
 
-    if (patterns.length === 0) {
+    if (allPatterns.length === 0) {
       await enrichChildren(params, context);
       return params;
     }
 
-    // Group by property, preferring confirmed over candidate
-    const byProperty = new Map<string, { modeValue: unknown; status: string }>();
-    for (const p of patterns) {
+    // Group by property: same-brand > confirmed > candidate > cross-brand
+    const byProperty = new Map<string, { modeValue: unknown; status: string; sameBrand: boolean }>();
+    for (const p of allPatterns) {
       if (p.status !== "candidate" && p.status !== "confirmed") continue;
+      const sameBrand = Boolean(brandId && p.brandId === brandId);
       const existing = byProperty.get(p.property);
-      if (!existing || (p.status === "confirmed" && existing.status !== "confirmed")) {
-        byProperty.set(p.property, { modeValue: p.modeValue, status: p.status });
+
+      if (!existing) {
+        byProperty.set(p.property, { modeValue: p.modeValue, status: p.status, sameBrand });
+        continue;
+      }
+
+      // Same-brand always wins over cross-brand
+      if (sameBrand && !existing.sameBrand) {
+        byProperty.set(p.property, { modeValue: p.modeValue, status: p.status, sameBrand });
+        continue;
+      }
+
+      // Within same priority tier, confirmed wins over candidate
+      if (sameBrand === existing.sameBrand && p.status === "confirmed" && existing.status !== "confirmed") {
+        byProperty.set(p.property, { modeValue: p.modeValue, status: p.status, sameBrand });
       }
     }
 

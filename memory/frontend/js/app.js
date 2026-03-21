@@ -703,7 +703,7 @@ function esc(str) {
 function extractTitle(content) {
   if (!content) return 'Untitled';
   const firstLine = content.split('\n').find(l => l.trim()) || 'Untitled';
-  return firstLine.replace(/^#+\s*/, '').trim();
+  return firstLine.replace(/^#+\s*/, '').replace(/\*\*/g, '').trim();
 }
 
 function extractPreview(content) {

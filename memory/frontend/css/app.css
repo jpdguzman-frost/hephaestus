@@ -171,8 +171,6 @@ body {
 
 .overview-inner {
   padding: 32px;
-  max-width: 1100px;
-  margin: 0 auto;
   width: 100%;
 }
 
@@ -247,7 +245,7 @@ h2 {
 
 .memory-row {
   display: grid;
-  grid-template-columns: 72px 90px 1fr 64px 50px;
+  grid-template-columns: 90px 1fr 64px 50px;
   gap: 12px;
   align-items: center;
   padding: 10px 16px;

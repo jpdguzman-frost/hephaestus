@@ -40,32 +40,40 @@
 **Also fixed:** Osiris SOM validator now accepts INSTANCE, VECTOR, GROUP, COMPONENT node types + normalizes roleCategories (navigation→structure, unknown→decorative)
 
 ### Phase 2: Passive Observer (Rex plugin)
-**Status:** Not started
-- 2.1 **BuildManifest** — map Figma node IDs to SOM roles during build (`plugin/build-manifest.ts`)
-- 2.2 **DocumentChange Observer** — listen to property changes on Rex-built frames (`plugin/refinement-observer.ts`)
-- 2.3 **Rex Server Relay** — forward observations to Osiris
-- 2.4 **Osiris: Refinement Record Storage** — `refinement_records` collection
+**Status:** Complete (2026-03-21)
+- [x] **BuildManifest** — `plugin/build-manifest.ts` tracks node IDs to SOM roles
+- [x] **DocumentChange Observer** — filters, batches, net-zero detection, 10s idle / 30s interval flush
+- [x] **Rex Server Relay** — POST `/observations` endpoint forwards to Osiris
+- [x] **Osiris: Refinement Record Storage** — `refinement_records` collection + GET/POST endpoints
+- [x] **TRACK_FRAME command** — explicit frame tracking via MCP tool
+- **Verified:** 20+ records captured from wise_77, paypal_146 live refinements
 
 ### Phase 3: Adversarial Filter + Patterns (Osiris)
-**Status:** Not started
-- 3.1 **Change Classifier** — 6-category adversarial filter (`src/refinement-filter.js`)
-- 3.2 **Pattern Extraction** — group by (brand, role, property), track direction
-- 3.3 **Property Pattern Storage** — `property_patterns` collection + 2 MCP tools
+**Status:** Complete (2026-03-21)
+- [x] **Change Classifier** — 6-category adversarial filter (`src/refinement-filter.js`)
+- [x] **Pattern Extraction** — groups by (role, property, brandId), computes mode/consistency/direction
+- [x] **Property Pattern Storage** — `property_patterns` collection + 2 MCP tools (`osiris_extract_patterns`, `osiris_get_patterns`)
+- [x] **Lifecycle promotion** — observed → candidate (3+ occ, 60%) → confirmed (5+ occ, 80%) → tombstoned
+- **Results:** 120 patterns across 5 brands, 16 at candidate status
 
-### Phase 4: Integration + Feedback
-**Status:** Not started
-- 4.1 Pattern application at build time
-- 4.2 Override detection via BuildManifest
-- 4.3 Pattern promotion rules (observed → candidate → confirmed → tombstoned)
-- 4.4 Recall interface
+### Phase 4: Pattern Application at Build Time
+**Status:** Complete (2026-03-21) — property-level patterns working
+- [x] **Pattern enrichment** — `enrichWithPatterns()` in tool-router.ts queries Osiris patterns by (brandId, somRole)
+- [x] **Default-only application** — patterns fill in values Claude didn't explicitly set
+- [x] **Recursive children** — brandId propagated, children enriched
+- [x] **Schema extended** — `somRole` and `brandId` optional fields on `create_node`
+- **Limitation:** Patterns fix property-level preferences but don't fix structural build quality. Template-based builds needed for consistent screen construction.
+
+### Phase 4.5: Template-Based Builds (Not started)
+**Problem:** Pattern enrichment works but cold-building from screenshots produces inconsistent structural quality. Need to build screens directly from reference template SOMs — using the refined node tree as scaffolding with content swapping.
 
 ### Phase 5: Maturation (Ongoing)
-- [ ] Style Propagation
-- [ ] Structural pattern support
-- [ ] Screenshot cold-start acceleration
-- [ ] Content fingerprinting fallback
-- [ ] Learning dashboard
+- [ ] Template-based screen construction (Phase 4.5)
+- [ ] Override detection via BuildManifest
+- [ ] Pattern tombstoning (designer overrides confirmed pattern)
 - [ ] Cross-brand directional patterns
+- [ ] Learning dashboard
+- [ ] Screenshot cold-start acceleration
 
 ---
 

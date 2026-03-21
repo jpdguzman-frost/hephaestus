@@ -183,7 +183,9 @@ async function loadSidebar(reset = false) {
       excludeTags: ['chat-session', 'chat-message', 'chat-history'],
     };
     if (filterCategory.value) opts.category = filterCategory.value;
-    if (filterFile.value) {
+    if (filterFile.value === '__team__') {
+      opts.scope = 'team';
+    } else if (filterFile.value) {
       opts.context = { fileKey: filterFile.value };
     }
 
@@ -217,10 +219,11 @@ async function populateFileFilter() {
   try {
     const { files } = await api.files(true);
     filterFile.innerHTML = '<option value="">All files</option>' +
+      '<option value="__team__">Practice-Level Notes</option>' +
       files.map(f =>
         `<option value="${esc(f.fileKey)}">${esc(f.fileName || f.fileKey)} (${f.count})</option>`
       ).join('');
-    if (current && files.some(f => f.fileKey === current)) {
+    if (current && (current === '__team__' || files.some(f => f.fileKey === current))) {
       filterFile.value = current;
     }
   } catch (err) {

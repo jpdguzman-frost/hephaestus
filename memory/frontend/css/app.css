@@ -289,8 +289,8 @@ h2 {
 }
 
 .browse-sidebar {
-  width: 300px;
-  min-width: 300px;
+  width: 320px;
+  min-width: 320px;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -939,8 +939,8 @@ select:focus, input:focus {
 }
 
 .chat-sidebar {
-  width: 300px;
-  min-width: 300px;
+  width: 320px;
+  min-width: 320px;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;

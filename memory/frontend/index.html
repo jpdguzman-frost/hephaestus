@@ -68,8 +68,10 @@
           <div class="sidebar-filters">
             <div class="filter-row">
               <select id="filter-file">
-              <option value="">All files</option>
-            </select>
+                <option value="">All files</option>
+              </select>
+            </div>
+            <div class="filter-row">
               <select id="filter-category">
                 <option value="">All categories</option>
                 <option value="context">Context</option>
@@ -80,12 +82,12 @@
                 <option value="preference">Preference</option>
                 <option value="correction">Correction</option>
               </select>
+              <label class="checkbox-label">
+                <input type="checkbox" id="filter-superseded">
+                <span class="checkbox-custom"></span>
+                Superseded
+              </label>
             </div>
-            <label class="checkbox-label">
-              <input type="checkbox" id="filter-superseded">
-              <span class="checkbox-custom"></span>
-              Superseded
-            </label>
           </div>
           <div class="sidebar-list" id="sidebar-list"></div>
         </aside>

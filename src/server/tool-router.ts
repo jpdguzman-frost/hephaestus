@@ -1131,7 +1131,12 @@ async function enrichWithPatterns(
 async function enrichChildren(params: Record<string, unknown>, context: ToolContext): Promise<void> {
   const children = params.children as Array<Record<string, unknown>> | undefined;
   if (!children) return;
+  const brandId = params.brandId as string | undefined;
   for (let i = 0; i < children.length; i++) {
+    // Propagate brandId to children if they don't have their own
+    if (brandId && !children[i].brandId) {
+      children[i].brandId = brandId;
+    }
     children[i] = await enrichWithPatterns(children[i], context);
   }
 }

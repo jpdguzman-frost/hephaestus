@@ -448,6 +448,7 @@ const baseCreateNodeFields = {
   textStyle: textStyle.optional(),
   layoutChild: layoutChildParams.optional(),
   somRole: z.string().optional(),
+  brandId: z.string().optional(),
 };
 
 /** Recursive type for create_node input */
@@ -470,6 +471,7 @@ export interface CreateNodeInput {
   textStyle?: TextStyle;
   layoutChild?: LayoutChildParams;
   somRole?: string;
+  brandId?: string;
   children?: CreateNodeInput[];
 }
 

@@ -643,6 +643,26 @@ function renderMarkdown(text) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
+    // Table: detect header row followed by separator row
+    if (line.trim().startsWith('|') && i + 1 < lines.length && /^\|[\s\-:]+(\|[\s\-:]+)+\|?\s*$/.test(lines[i + 1])) {
+      closeLists();
+      const headerCells = parseTableRow(line);
+      i++; // skip separator
+      html += '<div class="table-wrap"><table class="md-table"><thead><tr>';
+      for (const cell of headerCells) html += `<th>${inline(cell)}</th>`;
+      html += '</tr></thead><tbody>';
+      // Consume data rows
+      while (i + 1 < lines.length && lines[i + 1].trim().startsWith('|')) {
+        i++;
+        const cells = parseTableRow(lines[i]);
+        html += '<tr>';
+        for (let c = 0; c < headerCells.length; c++) html += `<td>${inline(cells[c] || '')}</td>`;
+        html += '</tr>';
+      }
+      html += '</tbody></table></div>';
+      continue;
+    }
+
     if (line.match(/^### /)) {
       closeLists();
       html += `<h3>${inline(line.slice(4))}</h3>`;
@@ -693,6 +713,10 @@ function inline(text) {
     .replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.+?)`/g, '<code>$1</code>');
+}
+
+function parseTableRow(line) {
+  return line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
 }
 
 // ─── Utilities ──────────────────────────────────────────────────────────────

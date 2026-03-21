@@ -73,8 +73,19 @@ router.post('/api/memories/recall', async (req, res) => {
 
 router.post('/api/memories/list', async (req, res) => {
   try {
-    const results = await store.list(req.body);
-    res.json({ memories: formatList(results), count: results.length });
+    const { items, total } = await store.list(req.body);
+    res.json({ memories: formatList(items), count: items.length, total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Distinct Files ─────────────────────────────────────────────────────────
+
+router.get('/api/memories/files', async (req, res) => {
+  try {
+    const files = await store.distinctFiles();
+    res.json({ files });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

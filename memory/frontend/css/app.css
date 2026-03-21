@@ -322,6 +322,14 @@ h2 {
   padding: 4px 0;
 }
 
+.sidebar-loader {
+  padding: 12px 18px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
 .browse-detail {
   flex: 1;
   overflow-y: auto;

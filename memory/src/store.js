@@ -149,7 +149,7 @@ export class Store {
   // ─── List ───────────────────────────────────────────────────────────────────
 
   async list(input) {
-    const { scope, category, context, limit, includeSuperseded } = input;
+    const { scope, category, context, limit, skip, includeSuperseded } = input;
 
     const filter = {};
 
@@ -165,11 +165,26 @@ export class Store {
     if (category) filter.category = category;
     if (!includeSuperseded) filter.supersededBy = { $exists: false };
 
-    return this.memories
+    const total = await this.memories.countDocuments(filter);
+    const items = await this.memories
       .find(filter)
       .sort({ scope: 1, category: 1, confidence: -1 })
+      .skip(skip || 0)
       .limit(limit || 20)
       .toArray();
+
+    return { items, total };
+  }
+
+  // ─── Distinct Files ────────────────────────────────────────────────────────
+
+  async distinctFiles() {
+    return this.memories.aggregate([
+      { $match: { fileKey: { $exists: true, $ne: null } } },
+      { $group: { _id: '$fileKey', fileName: { $first: '$fileName' }, count: { $sum: 1 } } },
+      { $sort: { fileName: 1 } },
+      { $project: { _id: 0, fileKey: '$_id', fileName: 1, count: 1 } },
+    ]).toArray();
   }
 
   // ─── Load for Session ───────────────────────────────────────────────────────

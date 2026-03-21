@@ -51,6 +51,7 @@ const api = {
   updateMemory: (id, data) => api.patch('/api/memories/' + id, data),
   deleteMemory: (id) => api.del('/api/memories/' + id),
   cleanup: (opts) => api.post('/api/memories/cleanup', opts),
+  files: () => api.get('/api/memories/files'),
 };
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -143,57 +144,101 @@ const filterFile = document.getElementById('filter-file');
 const filterCategory = document.getElementById('filter-category');
 const filterSuperseded = document.getElementById('filter-superseded');
 
-filterFile.addEventListener('change', () => renderSidebar());
-filterCategory.addEventListener('change', loadSidebar);
-filterSuperseded.addEventListener('change', loadSidebar);
+filterFile.addEventListener('change', () => loadSidebar(true));
+filterCategory.addEventListener('change', () => loadSidebar(true));
+filterSuperseded.addEventListener('change', () => loadSidebar(true));
 
-async function loadSidebar() {
+const PAGE_SIZE = 50;
+let sidebarTotal = 0;
+let sidebarLoading = false;
+
+async function loadSidebar(reset = false) {
+  if (sidebarLoading) return;
+  if (reset) {
+    sidebarMemories = [];
+    sidebarTotal = 0;
+  }
+  // Already have everything
+  if (!reset && sidebarMemories.length >= sidebarTotal && sidebarTotal > 0) return;
+
+  sidebarLoading = true;
   try {
     const opts = {
       context: {},
-      limit: 100,
+      limit: PAGE_SIZE,
+      skip: sidebarMemories.length,
       includeSuperseded: filterSuperseded.checked,
     };
     if (filterCategory.value) opts.category = filterCategory.value;
+    if (filterFile.value) {
+      opts.context = { fileKey: filterFile.value };
+    }
 
     const result = await api.list(opts);
-    sidebarMemories = result.memories || [];
-    populateFileFilter();
-    renderSidebar();
+    const batch = result.memories || [];
+    sidebarTotal = result.total || 0;
+    sidebarMemories = sidebarMemories.concat(batch);
+
+    // Only repopulate file filter on first load with no file selected
+    if (sidebarMemories.length === batch.length && !filterFile.value) {
+      populateFileFilter();
+    }
+    renderSidebar(reset);
   } catch (err) {
     console.error('Failed to load sidebar:', err);
+  } finally {
+    sidebarLoading = false;
   }
 }
 
-function populateFileFilter() {
+// Infinite scroll on sidebar list
+document.getElementById('sidebar-list').addEventListener('scroll', (e) => {
+  const el = e.target;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+    loadSidebar();
+  }
+});
+
+async function populateFileFilter() {
   const current = filterFile.value;
-  const files = new Map();
-  for (const m of sidebarMemories) {
-    if (m.fileName) files.set(m.fileKey || m.fileName, m.fileName);
-  }
-  filterFile.innerHTML = '<option value="">All files</option>' +
-    [...files.entries()].map(([key, name]) =>
-      `<option value="${esc(key)}">${esc(name)}</option>`
-    ).join('');
-  if (current && [...files.keys()].includes(current)) {
-    filterFile.value = current;
+  try {
+    const { files } = await api.files();
+    filterFile.innerHTML = '<option value="">All files</option>' +
+      files.map(f =>
+        `<option value="${esc(f.fileKey)}">${esc(f.fileName || f.fileKey)} (${f.count})</option>`
+      ).join('');
+    if (current && files.some(f => f.fileKey === current)) {
+      filterFile.value = current;
+    }
+  } catch (err) {
+    console.error('Failed to load file filter:', err);
   }
 }
 
-function renderSidebar() {
+function renderSidebar(reset = false) {
   const container = document.getElementById('sidebar-list');
-  const fileVal = filterFile.value;
-  const filtered = fileVal
-    ? sidebarMemories.filter(m => (m.fileKey || m.fileName) === fileVal)
-    : sidebarMemories;
 
-  if (filtered.length === 0) {
+  if (sidebarMemories.length === 0) {
     container.innerHTML = '<div class="empty">No memories found</div>';
     return;
   }
 
-  container.innerHTML = filtered.map((m, i) => `
-    <div class="sidebar-card${m.id === selectedMemoryId ? ' selected' : ''}" data-id="${m.id}" style="animation-delay:${i * 25}ms">
+  if (reset) container.innerHTML = '';
+
+  // Remove existing loader if present
+  const existingLoader = container.querySelector('.sidebar-loader');
+  if (existingLoader) existingLoader.remove();
+
+  // Determine which cards to render (only new ones on append)
+  const existingCount = container.querySelectorAll('.sidebar-card').length;
+  const newItems = sidebarMemories.slice(existingCount);
+
+  const fragment = document.createDocumentFragment();
+  for (const m of newItems) {
+    const div = document.createElement('div');
+    div.className = `sidebar-card${m.id === selectedMemoryId ? ' selected' : ''}`;
+    div.dataset.id = m.id;
+    div.innerHTML = `
       <div class="card-top">
         <span class="badge ${badgeClass(m.category)}">${esc(m.category)}</span>
         <span class="card-age">${timeAgo(m.createdAt)}</span>
@@ -207,12 +252,19 @@ function renderSidebar() {
         </span>
         <span class="card-tags">${esc((m.tags || []).join(', '))}</span>
       </div>
-    </div>
-  `).join('');
+    `;
+    div.addEventListener('click', () => selectMemory(m.id));
+    fragment.appendChild(div);
+  }
+  container.appendChild(fragment);
 
-  container.querySelectorAll('.sidebar-card').forEach(card => {
-    card.addEventListener('click', () => selectMemory(card.dataset.id));
-  });
+  // Show count / loading indicator
+  if (sidebarMemories.length < sidebarTotal) {
+    const loader = document.createElement('div');
+    loader.className = 'sidebar-loader';
+    loader.textContent = `${sidebarMemories.length} of ${sidebarTotal} — scroll for more`;
+    container.appendChild(loader);
+  }
 }
 
 // ─── Browse: Detail Panel ───────────────────────────────────────────────────

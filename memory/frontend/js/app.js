@@ -338,13 +338,13 @@ function renderDetail(panel, memory) {
           </thead>
           <tbody>
             <tr>
-              <td>${esc(memory._id || memory.id || '')}</td>
-              <td>${(memory.confidence || 0).toFixed(3)}</td>
-              <td>${fmtDate(memory.createdAt)}</td>
-              <td>${fmtDate(memory.updatedAt)}</td>
-              <td>${fmtDate(memory.lastAccessedAt)}</td>
-              <td>${memory.accessCount || 0}</td>
-              <td>${esc(memory.fileKey || '')}</td>
+              <td data-label="ID">${esc(memory._id || memory.id || '')}</td>
+              <td data-label="Confidence">${(memory.confidence || 0).toFixed(3)}</td>
+              <td data-label="Created">${fmtDate(memory.createdAt)}</td>
+              <td data-label="Updated">${fmtDate(memory.updatedAt)}</td>
+              <td data-label="Last Accessed">${fmtDate(memory.lastAccessedAt)}</td>
+              <td data-label="Access Count">${memory.accessCount || 0}</td>
+              <td data-label="File Key">${esc(memory.fileKey || '')}</td>
             </tr>
           </tbody>
         </table>

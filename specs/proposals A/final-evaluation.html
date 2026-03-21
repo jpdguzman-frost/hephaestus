@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Refinement Learning Architecture | Final Evaluation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-elevated: #12121a;
+    --bg-card: #16161f;
+    --bg-card-hover: #1c1c28;
+    --border: #25253a;
+    --border-light: #2a2a42;
+    --text: #e8e8f0;
+    --text-dim: #8888a8;
+    --text-muted: #55556a;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108, 92, 231, 0.15);
+    --accent-bright: #8b7cf7;
+    --green: #22c55e;
+    --green-dim: rgba(34, 197, 94, 0.12);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245, 158, 11, 0.12);
+    --red: #ef4444;
+    --red-dim: rgba(239, 68, 68, 0.12);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59, 130, 246, 0.12);
+    --cyan: #06b6d4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--bg);
+  }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Noise Texture ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  section {
+    padding: 80px 0;
+    border-bottom: 1px solid var(--border);
+    opacity: 0;
+    transform: translateY(24px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  section:nth-child(2) { animation-delay: 0.1s; }
+  section:nth-child(3) { animation-delay: 0.15s; }
+  section:nth-child(4) { animation-delay: 0.2s; }
+  section:nth-child(5) { animation-delay: 0.25s; }
+  section:nth-child(6) { animation-delay: 0.3s; }
+  section:nth-child(7) { animation-delay: 0.35s; }
+  section:last-child { border-bottom: none; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 120px 0 80px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(108, 92, 231, 0.25);
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent-bright);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(40px, 6vw, 64px);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+    max-width: 700px;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--accent-bright);
+  }
+
+  .hero-meta {
+    display: flex;
+    gap: 32px;
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  .hero-meta span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hero-meta span::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    background: var(--text-muted);
+    border-radius: 50%;
+  }
+
+  /* ── Section Headers ── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+  }
+
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 600px;
+    margin-bottom: 48px;
+    line-height: 1.7;
+  }
+
+  /* ── Score Cards ── */
+  .scores-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .score-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .score-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+  }
+
+  .score-card.winner {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 8px 32px var(--accent-glow);
+  }
+
+  .score-card.winner::after {
+    content: 'RECOMMENDED';
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent-bright);
+    background: var(--accent-glow);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(108, 92, 231, 0.3);
+  }
+
+  .score-card-number {
+    font-family: 'DM Serif Display', serif;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .score-card-name {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    line-height: 1.3;
+  }
+
+  .score-total {
+    font-family: 'DM Serif Display', serif;
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .score-total span {
+    font-size: 20px;
+    color: var(--text-muted);
+  }
+
+  .score-bar-group {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .score-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .score-bar-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    width: 88px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .score-bar-track {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+
+  .score-bar-val {
+    font-size: 11px;
+    font-weight: 600;
+    width: 20px;
+    text-align: right;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Best Ideas ── */
+  .ideas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .idea-card {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 20px;
+    padding: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: all 0.25s ease;
+  }
+
+  .idea-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-light);
+  }
+
+  .idea-num {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    border-radius: 12px;
+    color: var(--accent-bright);
+  }
+
+  .idea-source {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .idea-title {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .idea-desc {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  /* ── Architecture Diagram ── */
+  .arch-diagram {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 32px;
+    margin-bottom: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .arch-diagram::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .arch-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+  }
+
+  .arch-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    align-items: center;
+  }
+
+  .arch-node {
+    padding: 16px 28px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    max-width: 300px;
+    width: 100%;
+  }
+
+  .arch-node.primary {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 24px var(--accent-glow);
+  }
+
+  .arch-node.secondary {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-light);
+  }
+
+  .arch-branch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    width: 100%;
+    max-width: 560px;
+  }
+
+  .arch-track {
+    padding: 20px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    text-align: center;
+  }
+
+  .arch-track.a {
+    background: var(--green-dim);
+    border-color: rgba(34, 197, 94, 0.2);
+  }
+
+  .arch-track.b {
+    background: var(--blue-dim);
+    border-color: rgba(59, 130, 246, 0.2);
+  }
+
+  .arch-track-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .arch-track.a .arch-track-label { color: var(--green); }
+  .arch-track.b .arch-track-label { color: var(--blue); }
+
+  .arch-track-title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .arch-track-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .arch-connector {
+    width: 1px;
+    height: 20px;
+    background: var(--border-light);
+    margin: 0 auto;
+  }
+
+  .arch-filter {
+    padding: 12px 24px;
+    border-radius: 8px;
+    background: var(--amber-dim);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--amber);
+    text-align: center;
+  }
+
+  /* ── Data Flow ── */
+  .flow-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .flow-card {
+    padding: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .flow-card h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .flow-card h4 .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .flow-card ol {
+    list-style: none;
+    counter-reset: flow;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .flow-card ol li {
+    counter-increment: flow;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    padding-left: 24px;
+    position: relative;
+  }
+
+  .flow-card ol li::before {
+    content: counter(flow);
+    position: absolute;
+    left: 0;
+    top: 1px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.04);
+    border-radius: 4px;
+  }
+
+  /* ── Timeline ── */
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: linear-gradient(180deg, var(--accent), var(--green), var(--amber), var(--blue), var(--text-muted));
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 40px;
+  }
+
+  .timeline-item:last-child { padding-bottom: 0; }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -28px;
+    top: 8px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid;
+    background: var(--bg);
+  }
+
+  .timeline-item:nth-child(1)::before { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+  .timeline-item:nth-child(2)::before { border-color: var(--green); }
+  .timeline-item:nth-child(3)::before { border-color: var(--amber); }
+  .timeline-item:nth-child(4)::before { border-color: var(--blue); }
+  .timeline-item:nth-child(5)::before { border-color: var(--text-muted); }
+
+  .timeline-phase {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+
+  .timeline-item:nth-child(1) .timeline-phase { color: var(--accent-bright); }
+  .timeline-item:nth-child(2) .timeline-phase { color: var(--green); }
+  .timeline-item:nth-child(3) .timeline-phase { color: var(--amber); }
+  .timeline-item:nth-child(4) .timeline-phase { color: var(--blue); }
+  .timeline-item:nth-child(5) .timeline-phase { color: var(--text-muted); }
+
+  .timeline-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .timeline-desc {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .timeline-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .timeline-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+  }
+
+  /* ── Verdict ── */
+  .verdict {
+    background: linear-gradient(135deg, rgba(108, 92, 231, 0.08), rgba(34, 197, 94, 0.05));
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    border-radius: 16px;
+    padding: 48px;
+    margin-top: 48px;
+  }
+
+  .verdict h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px;
+    margin-bottom: 24px;
+  }
+
+  .verdict-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-top: 32px;
+  }
+
+  .verdict-col h4 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .verdict-col ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .verdict-col li {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .verdict-col li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+
+  .verdict-col.now li::before { background: var(--green); }
+  .verdict-col.later li::before { background: var(--text-muted); }
+
+  /* ── Kraken Test ── */
+  .kraken-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .kraken-row {
+    display: grid;
+    grid-template-columns: 32px 1fr 140px 100px;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+
+  .kraken-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  .kraken-change { color: var(--text); }
+
+  .kraken-mechanism {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-align: center;
+  }
+
+  .kraken-mechanism.template { background: var(--green-dim); color: var(--green); }
+  .kraken-mechanism.pattern { background: var(--blue-dim); color: var(--blue); }
+  .kraken-mechanism.filter { background: var(--amber-dim); color: var(--amber); }
+  .kraken-mechanism.deferred { background: rgba(255,255,255,0.04); color: var(--text-muted); }
+
+  .kraken-coverage {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  /* ── Promotion Rules ── */
+  .promo-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .promo-step {
+    padding: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+  }
+
+  .promo-count {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    margin-bottom: 4px;
+  }
+
+  .promo-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+
+  .promo-step:nth-child(1) .promo-label { color: var(--text-muted); }
+  .promo-step:nth-child(2) .promo-label { color: var(--amber); }
+  .promo-step:nth-child(3) .promo-label { color: var(--green); }
+
+  .promo-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* ── Footer ── */
+  footer {
+    padding: 48px 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .scores-grid { grid-template-columns: 1fr; }
+    .flow-cards { grid-template-columns: 1fr; }
+    .arch-branch { grid-template-columns: 1fr; }
+    .verdict-grid { grid-template-columns: 1fr; }
+    .promo-steps { grid-template-columns: 1fr; }
+    .kraken-row { grid-template-columns: 1fr; gap: 4px; }
+    .container { padding: 0 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════ HERO ════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">Final Evaluation</div>
+    <h1>Refinement <em>Learning</em> Architecture</h1>
+    <div class="hero-meta">
+      <span>Senior Design Systems Architect</span>
+      <span>March 21, 2026</span>
+      <span>6 Proposals Evaluated</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ SCORES ════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">Part 1</div>
+    <h2>Proposal Scores</h2>
+    <p class="section-desc">Six proposals evaluated across five rubrics: ease of use, compound learning, simplicity, fault tolerance, and signal vs noise discrimination.</p>
+
+    <div class="scores-grid">
+      <!-- P04 Winner -->
+      <div class="score-card winner">
+        <div class="score-card-number">Proposal 04</div>
+        <div class="score-card-name">Template Evolution</div>
+        <div class="score-total">39<span>/50</span></div>
+        <div class="score-bar-group">
+          <div class="score-bar-row"><span class="score-bar-label">Ease of Use</span><div class="score-bar-track"><div class="score-bar-fill" style="width:90%;background:var(--green)"></div></div><span class="score-bar-val">9</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Learning</span><div class="score-bar-track"><div class="score-bar-fill" style="width:50%;background:var(--amber)"></div></div><span class="score-bar-val">5</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Simplicity</span><div class="score-bar-track"><div class="score-bar-fill" style="width:80%;background:var(--green)"></div></div><span class="score-bar-val">8</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Fault Tol.</span><div class="score-bar-track"><div class="score-bar-fill" style="width:90%;background:var(--green)"></div></div><span class="score-bar-val">9</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Signal/Noise</span><div class="score-bar-track"><div class="score-bar-fill" style="width:80%;background:var(--green)"></div></div><span class="score-bar-val">8</span></div>
+        </div>
+      </div>
+
+      <!-- P05 -->
+      <div class="score-card">
+        <div class="score-card-number">Proposal 05</div>
+        <div class="score-card-name">Designer Workflow</div>
+        <div class="score-total">37<span>/50</span></div>
+        <div class="score-bar-group">
+          <div class="score-bar-row"><span class="score-bar-label">Ease of Use</span><div class="score-bar-track"><div class="score-bar-fill" style="width:100%;background:var(--accent)"></div></div><span class="score-bar-val">10</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Learning</span><div class="score-bar-track"><div class="score-bar-fill" style="width:80%;background:var(--green)"></div></div><span class="score-bar-val">8</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Simplicity</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Fault Tol.</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Signal/Noise</span><div class="score-bar-track"><div class="score-bar-fill" style="width:50%;background:var(--amber)"></div></div><span class="score-bar-val">5</span></div>
+        </div>
+      </div>
+
+      <!-- P06 -->
+      <div class="score-card">
+        <div class="score-card-number">Proposal 06</div>
+        <div class="score-card-name">Adversarial Filter</div>
+        <div class="score-total">34<span>/50</span></div>
+        <div class="score-bar-group">
+          <div class="score-bar-row"><span class="score-bar-label">Ease of Use</span><div class="score-bar-track"><div class="score-bar-fill" style="width:40%;background:var(--red)"></div></div><span class="score-bar-val">4</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Learning</span><div class="score-bar-track"><div class="score-bar-fill" style="width:60%;background:var(--amber)"></div></div><span class="score-bar-val">6</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Simplicity</span><div class="score-bar-track"><div class="score-bar-fill" style="width:60%;background:var(--amber)"></div></div><span class="score-bar-val">6</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Fault Tol.</span><div class="score-bar-track"><div class="score-bar-fill" style="width:90%;background:var(--green)"></div></div><span class="score-bar-val">9</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Signal/Noise</span><div class="score-bar-track"><div class="score-bar-fill" style="width:90%;background:var(--green)"></div></div><span class="score-bar-val">9</span></div>
+        </div>
+      </div>
+
+      <!-- P01 -->
+      <div class="score-card">
+        <div class="score-card-number">Proposal 01</div>
+        <div class="score-card-name">Structural-First</div>
+        <div class="score-total">33<span>/50</span></div>
+        <div class="score-bar-group">
+          <div class="score-bar-row"><span class="score-bar-label">Ease of Use</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Learning</span><div class="score-bar-track"><div class="score-bar-fill" style="width:80%;background:var(--green)"></div></div><span class="score-bar-val">8</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Simplicity</span><div class="score-bar-track"><div class="score-bar-fill" style="width:50%;background:var(--amber)"></div></div><span class="score-bar-val">5</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Fault Tol.</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Signal/Noise</span><div class="score-bar-track"><div class="score-bar-fill" style="width:60%;background:var(--amber)"></div></div><span class="score-bar-val">6</span></div>
+        </div>
+      </div>
+
+      <!-- P02 -->
+      <div class="score-card">
+        <div class="score-card-number">Proposal 02</div>
+        <div class="score-card-name">Content Fingerprint</div>
+        <div class="score-total">33<span>/50</span></div>
+        <div class="score-bar-group">
+          <div class="score-bar-row"><span class="score-bar-label">Ease of Use</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Learning</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Simplicity</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Fault Tol.</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Signal/Noise</span><div class="score-bar-track"><div class="score-bar-fill" style="width:50%;background:var(--amber)"></div></div><span class="score-bar-val">5</span></div>
+        </div>
+      </div>
+
+      <!-- P03 -->
+      <div class="score-card">
+        <div class="score-card-number">Proposal 03</div>
+        <div class="score-card-name">Visual-Perceptual</div>
+        <div class="score-total">32<span>/50</span></div>
+        <div class="score-bar-group">
+          <div class="score-bar-row"><span class="score-bar-label">Ease of Use</span><div class="score-bar-track"><div class="score-bar-fill" style="width:80%;background:var(--green)"></div></div><span class="score-bar-val">8</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Learning</span><div class="score-bar-track"><div class="score-bar-fill" style="width:60%;background:var(--amber)"></div></div><span class="score-bar-val">6</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Simplicity</span><div class="score-bar-track"><div class="score-bar-fill" style="width:50%;background:var(--amber)"></div></div><span class="score-bar-val">5</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Fault Tol.</span><div class="score-bar-track"><div class="score-bar-fill" style="width:60%;background:var(--amber)"></div></div><span class="score-bar-val">6</span></div>
+          <div class="score-bar-row"><span class="score-bar-label">Signal/Noise</span><div class="score-bar-track"><div class="score-bar-fill" style="width:70%;background:var(--green)"></div></div><span class="score-bar-val">7</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ BEST IDEAS ════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">Part 2</div>
+    <h2>Best Ideas Across Proposals</h2>
+    <p class="section-desc">Seven individually strong and complementary ideas, regardless of which proposal they came from.</p>
+
+    <div class="ideas-list">
+      <div class="idea-card">
+        <div class="idea-num">1</div>
+        <div>
+          <div class="idea-source">Proposal 05</div>
+          <div class="idea-title">Passive Observation via documentchange</div>
+          <div class="idea-desc">Rex already knows every node it created. <code>documentchange</code> gives exact before/after values without any matching algorithm. This eliminates the node-matching problem entirely.</div>
+        </div>
+      </div>
+      <div class="idea-card">
+        <div class="idea-num">2</div>
+        <div>
+          <div class="idea-source">Proposal 04</div>
+          <div class="idea-title">Golden Templates as Primary Learning Artifact</div>
+          <div class="idea-desc">Storing the refined SOM as a reusable template captures 100% of decisions without extraction, inference, or rule formation. Templates are facts, not abstractions.</div>
+        </div>
+      </div>
+      <div class="idea-card">
+        <div class="idea-num">3</div>
+        <div>
+          <div class="idea-source">Proposal 06</div>
+          <div class="idea-title">Adversarial Change Taxonomy</div>
+          <div class="idea-desc">Six categories: AI error, screen-specific, artifact cleanup, reverted experiment, content-driven, genuine principle. The missing piece that prevents self-poisoning.</div>
+        </div>
+      </div>
+      <div class="idea-card">
+        <div class="idea-num">4</div>
+        <div>
+          <div class="idea-source">Proposal 02</div>
+          <div class="idea-title">Content Fingerprinting for Fallback Matching</div>
+          <div class="idea-desc">For screens Rex didn't build, content fingerprinting provides the best fallback. Simple, deterministic, handles renames and reparenting gracefully.</div>
+        </div>
+      </div>
+      <div class="idea-card">
+        <div class="idea-num">5</div>
+        <div>
+          <div class="idea-source">Proposal 05, Round 2</div>
+          <div class="idea-title">BuildManifest for Node-to-Role Mapping</div>
+          <div class="idea-desc">Explicit mapping of Figma node IDs to SOM roles at build time. Trivial to build (one Map.set per node), invaluable for pattern extraction.</div>
+        </div>
+      </div>
+      <div class="idea-card">
+        <div class="idea-num">6</div>
+        <div>
+          <div class="idea-source">Consensus (P01, P02, P05, P06)</div>
+          <div class="idea-title">Brand-Scoped Storage</div>
+          <div class="idea-desc">Rules are brand-scoped by default. Cross-brand generalization only for directional patterns. Every proposal that addressed contradictions converged here.</div>
+        </div>
+      </div>
+      <div class="idea-card">
+        <div class="idea-num">7</div>
+        <div>
+          <div class="idea-source">Proposal 03</div>
+          <div class="idea-title">Screenshot-as-Index for Cold Start</div>
+          <div class="idea-desc">Visual comparison bootstraps learning faster than raw property diffs for the first 5 screens. Once patterns exist, vision becomes unnecessary.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ MERGED ARCHITECTURE ════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">Part 3</div>
+    <h2>The Merged Solution</h2>
+    <p class="section-desc">Template-First with Passive Pattern Learning. Two complementary tracks that operate independently but reinforce each other.</p>
+
+    <div class="arch-diagram">
+      <div class="arch-label">System Architecture</div>
+      <div class="arch-flow">
+        <div class="arch-node primary">Rex Builds Screen</div>
+        <div class="arch-branch">
+          <div class="arch-track a">
+            <div class="arch-track-label">Track A</div>
+            <div class="arch-track-title">Use Template</div>
+            <div class="arch-track-desc">Golden SOM Library</div>
+          </div>
+          <div class="arch-track b">
+            <div class="arch-track-label">Track B</div>
+            <div class="arch-track-title">Build from Reference</div>
+            <div class="arch-track-desc">+ Apply Property Patterns</div>
+          </div>
+        </div>
+        <div class="arch-node secondary">Designer Refines</div>
+        <div class="arch-branch">
+          <div class="arch-track a">
+            <div class="arch-track-label">Track A</div>
+            <div class="arch-track-title">Save as Golden Template</div>
+            <div class="arch-track-desc">v(N+1) supersedes v(N)</div>
+          </div>
+          <div class="arch-track b">
+            <div class="arch-track-label">Track B</div>
+            <div class="arch-track-title">Passive Observer</div>
+            <div class="arch-track-desc">documentchange capture</div>
+          </div>
+        </div>
+        <div style="max-width:280px;width:100%">
+          <div class="arch-filter">Adversarial Filter</div>
+        </div>
+        <div class="arch-node secondary">Property Patterns Store</div>
+      </div>
+    </div>
+
+    <div class="flow-cards">
+      <div class="flow-card">
+        <h4><span class="dot" style="background:var(--green)"></span> At Build Time</h4>
+        <ol>
+          <li>Query for matching Golden Template (brand, screen type, tags)</li>
+          <li>If template exists (score > 0.5): use template SOM, populate content slots</li>
+          <li>If no template: fall back to Osiris reference + apply confirmed property patterns (confidence >= 0.7)</li>
+          <li>Build using Rex tools</li>
+        </ol>
+      </div>
+      <div class="flow-card">
+        <h4><span class="dot" style="background:var(--blue)"></span> After Refinement</h4>
+        <ol>
+          <li>Passive observer records all property changes via documentchange, mapped to roles via BuildManifest</li>
+          <li>Observation window closes on idle (60s), new build, or page switch</li>
+          <li>Adversarial Filter classifies each change into 6 categories</li>
+          <li>Genuine preferences enter pattern store; AI errors route to builder diagnostics</li>
+        </ol>
+      </div>
+    </div>
+
+    <h3 style="font-family:'DM Serif Display',serif;font-size:22px;margin-bottom:16px">Pattern Promotion</h3>
+    <div class="promo-steps">
+      <div class="promo-step">
+        <div class="promo-count">1-2</div>
+        <div class="promo-label">Observed</div>
+        <div class="promo-desc">Recorded but not applied. Too early to distinguish signal from noise.</div>
+      </div>
+      <div class="promo-step">
+        <div class="promo-count">3-4</div>
+        <div class="promo-label">Candidate</div>
+        <div class="promo-desc">Surfaced as a brief question during next build. Max one question per build.</div>
+      </div>
+      <div class="promo-step">
+        <div class="promo-count">5+</div>
+        <div class="promo-label">Confirmed</div>
+        <div class="promo-desc">Auto-applied silently. Evidence threshold is high enough that false positives are rare.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ KRAKEN TEST ════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">Stress Test</div>
+    <h2>Handling the Kraken Restructure</h2>
+    <p class="section-desc">Five simultaneous changes on a single screen. How does each mechanism respond?</p>
+
+    <div class="kraken-grid">
+      <div class="kraken-row">
+        <div class="kraken-num">1</div>
+        <div class="kraken-change">CTA reparented into new wrapper section</div>
+        <div class="kraken-mechanism template">Template</div>
+        <div class="kraken-coverage" style="color:var(--green)">100%</div>
+      </div>
+      <div class="kraken-row">
+        <div class="kraken-num">2</div>
+        <div class="kraken-change">Numpad spacing 4 &rarr; 0</div>
+        <div class="kraken-mechanism pattern">Pattern</div>
+        <div class="kraken-coverage" style="color:var(--blue)">Tracked</div>
+      </div>
+      <div class="kraken-row">
+        <div class="kraken-num">3</div>
+        <div class="kraken-change">Frame renamed (Frame 1 &rarr; content-area)</div>
+        <div class="kraken-mechanism filter">Filtered</div>
+        <div class="kraken-coverage" style="color:var(--amber)">Discarded</div>
+      </div>
+      <div class="kraken-row">
+        <div class="kraken-num">4</div>
+        <div class="kraken-change">Fee-row wrapper flattened</div>
+        <div class="kraken-mechanism template">Template</div>
+        <div class="kraken-coverage" style="color:var(--green)">100%</div>
+      </div>
+      <div class="kraken-row">
+        <div class="kraken-num">5</div>
+        <div class="kraken-change">Root set to SPACE_BETWEEN</div>
+        <div class="kraken-mechanism pattern">Pattern</div>
+        <div class="kraken-coverage" style="color:var(--green)">Confirmed</div>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-top:16px;text-align:center">Golden Template captures all 5 changes. Property patterns capture 2 &amp; 5. Filter correctly discards 3.</p>
+  </div>
+</section>
+
+<!-- ════════ TIMELINE ════════ -->
+<section>
+  <div class="container">
+    <div class="section-label">Implementation</div>
+    <h2>Phased Rollout</h2>
+    <p class="section-desc">Ship value incrementally. Templates first for immediate reuse, observation second for compound learning.</p>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 1 &mdash; Days 1-3</div>
+        <div class="timeline-title">Golden Templates</div>
+        <div class="timeline-desc">Save and reuse refined screens. Immediate value from the first refinement session.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">golden_templates collection</span>
+          <span class="timeline-tag">save_golden_template</span>
+          <span class="timeline-tag">find_template</span>
+          <span class="timeline-tag">content slot detection</span>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 2 &mdash; Days 4-6</div>
+        <div class="timeline-title">Passive Observer</div>
+        <div class="timeline-desc">Silently capture every property change the designer makes. Data accumulates. Nothing applied yet.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">documentchange listener</span>
+          <span class="timeline-tag">BuildManifest</span>
+          <span class="timeline-tag">observation window</span>
+          <span class="timeline-tag">RefinementRecords</span>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 3 &mdash; Days 7-10</div>
+        <div class="timeline-title">Adversarial Filter + Patterns</div>
+        <div class="timeline-desc">Classify changes, reject noise, extract recurring patterns. High-confidence patterns auto-applied.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">change taxonomy</span>
+          <span class="timeline-tag">recurrence grouping</span>
+          <span class="timeline-tag">confidence scoring</span>
+          <span class="timeline-tag">brand scoping</span>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 4 &mdash; Days 11-14</div>
+        <div class="timeline-title">Integration &amp; Feedback</div>
+        <div class="timeline-desc">End-to-end learning loop. Override detection. Self-correction. Pattern recall.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">pattern application</span>
+          <span class="timeline-tag">override detection</span>
+          <span class="timeline-tag">confidence decay</span>
+          <span class="timeline-tag">backfill pipeline</span>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 5 &mdash; Ongoing</div>
+        <div class="timeline-title">Maturation</div>
+        <div class="timeline-desc">Style propagation, structural patterns, cold-start acceleration, learning dashboard.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">style propagation</span>
+          <span class="timeline-tag">structural patterns</span>
+          <span class="timeline-tag">screenshot cold-start</span>
+          <span class="timeline-tag">content fingerprint fallback</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ VERDICT ════════ -->
+<section style="border-bottom:none">
+  <div class="container">
+    <div class="section-label">Part 4</div>
+    <h2>Recommendation</h2>
+
+    <div class="verdict">
+      <h3>Build Template Evolution first, then layer Passive Observation with Adversarial Filtering.</h3>
+      <p style="color:var(--text-dim);font-size:15px;line-height:1.7;max-width:700px">Templates deliver value on Day 1. Passive observation fills the generalization gap. The adversarial filter prevents self-poisoning. Everything else is Phase 5.</p>
+
+      <div class="verdict-grid">
+        <div class="verdict-col now">
+          <h4>Ships in 2 Weeks</h4>
+          <ul>
+            <li>Golden Templates with 100% fidelity, zero inference risk</li>
+            <li>Silent edit observation via documentchange</li>
+            <li>Adversarial filter rejects ~50% as noise</li>
+            <li>Recurring patterns auto-promoted to confirmed rules</li>
+            <li>Self-corrects when designer overrides pattern-applied values</li>
+          </ul>
+        </div>
+        <div class="verdict-col later">
+          <h4>After 3 Months</h4>
+          <ul>
+            <li>20+ templates per brand covering common screen types</li>
+            <li>10-15 confirmed property patterns per brand</li>
+            <li>80-90% reduction in refinement time on templated screens</li>
+            <li>40-60% reduction on novel screen types via patterns alone</li>
+            <li>The designer has forgotten the system is learning</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Rex Refinement Learning Architecture &middot; <a href="final-evaluation.md">View source document</a>
+  </div>
+</footer>
+
+</body>
+</html>

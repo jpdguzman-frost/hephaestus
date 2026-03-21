@@ -4,7 +4,7 @@ import {
   createLogger,
   getComments,
   loadConfig
-} from "./chunk-WMOEZE4I.js";
+} from "./chunk-PRDKVBQ5.js";
 import {
   BlendMode,
   CommandStatus,
@@ -566,6 +566,7 @@ var HeartbeatMonitor = class {
   pingTimer = null;
   pongTimeout = null;
   pingSender = null;
+  heartbeatPaused = false;
   // Metrics
   metrics = {
     commands: {
@@ -652,6 +653,7 @@ var HeartbeatMonitor = class {
     this.missedPongs = 0;
     this.awaitingPong = false;
     this.pingTimer = setInterval(() => {
+      if (this.heartbeatPaused) return;
       if (this.awaitingPong) {
         this.missedPongs++;
         this.logger.warn("Missed WebSocket pong", {
@@ -680,6 +682,22 @@ var HeartbeatMonitor = class {
       this.pongTimeout = null;
     }
     this.connection.recordHeartbeat();
+  }
+  /**
+   * Pause WS heartbeat pings while the plugin is executing a command.
+   * The plugin is single-threaded and cannot respond to pings during figma.* calls.
+   */
+  pauseWsHeartbeat() {
+    this.heartbeatPaused = true;
+  }
+  /**
+   * Resume WS heartbeat pings after command execution completes.
+   * Resets missed pong counter since the pause was intentional.
+   */
+  resumeWsHeartbeat() {
+    this.heartbeatPaused = false;
+    this.missedPongs = 0;
+    this.awaitingPong = false;
   }
   /** Record a WebSocket message. */
   recordWsMessage() {
@@ -877,445 +895,21 @@ var CommentWatcher = class {
   }
 };
 
-// src/memory/store.ts
-var MemoryStore = class {
-  client = null;
-  db = null;
-  memories = null;
-  config;
-  logger;
-  constructor(config, logger) {
-    this.config = config;
-    this.logger = logger.child({ component: "memory-store" });
-  }
-  /** Connect to MongoDB and set up indexes. */
-  async connect() {
-    if (!this.config.enabled) {
-      this.logger.info("Memory system disabled");
-      return;
-    }
-    try {
-      const { MongoClient } = await import("mongodb");
-      this.client = new MongoClient(this.config.mongoUri);
-      await this.client.connect();
-      this.db = this.client.db(this.config.dbName);
-      this.memories = this.db.collection("memories");
-      await this.memories.createIndex(
-        { scope: 1, confidence: -1 },
-        { background: true }
-      );
-      await this.memories.createIndex(
-        { fileKey: 1, scope: 1, confidence: -1 },
-        { background: true }
-      );
-      await this.memories.createIndex(
-        { userId: 1, scope: 1 },
-        { background: true }
-      );
-      await this.memories.createIndex({ tags: 1 }, { background: true });
-      await this.memories.createIndex(
-        { componentKey: 1 },
-        { background: true, sparse: true }
-      );
-      await this.memories.createIndex({ createdAt: 1 }, { background: true });
-      await this.memories.createIndex(
-        { supersededBy: 1 },
-        { background: true, sparse: true }
-      );
-      await this.memories.createIndex(
-        { content: "text", tags: "text" },
-        { background: true, name: "content_text" }
-      ).catch(() => {
-      });
-      this.logger.info("Memory store connected", {
-        uri: this.config.mongoUri.replace(/\/\/.*@/, "//<redacted>@"),
-        db: this.config.dbName
-      });
-    } catch (err) {
-      this.logger.error("Failed to connect memory store", {
-        error: err instanceof Error ? err.message : String(err)
-      });
-      this.client = null;
-      this.db = null;
-      this.memories = null;
-    }
-  }
-  /** Disconnect from MongoDB. */
-  async disconnect() {
-    if (this.client) {
-      await this.client.close();
-      this.client = null;
-      this.db = null;
-      this.memories = null;
-      this.logger.info("Memory store disconnected");
-    }
-  }
-  /** Whether the memory store is connected and usable. */
-  get isConnected() {
-    return this.memories !== null;
-  }
-  // ─── CRUD Operations ───────────────────────────────────────────────────────
-  /** Store a new memory. Checks for conflicts and supersedes if needed. */
-  async remember(input) {
-    this.ensureConnected();
-    const now = /* @__PURE__ */ new Date();
-    const user = {
-      id: input.context.userId ?? "unknown",
-      name: input.context.userName ?? "Unknown"
-    };
-    const existing = await this.findSimilar(
-      input.content,
-      input.scope,
-      input.context
-    );
-    if (existing) {
-      await this.memories.updateOne(
-        { _id: existing._id },
-        {
-          $set: {
-            supersededBy: "pending",
-            // Will be updated below
-            confidence: 0,
-            updatedAt: now
-          }
-        }
-      );
-    }
-    const entry = {
-      _id: generateId(),
-      scope: input.scope,
-      category: input.category,
-      content: input.content,
-      tags: input.tags ?? [],
-      source: input.source ?? "explicit",
-      createdBy: user,
-      createdAt: now,
-      updatedAt: now,
-      lastAccessedAt: now,
-      confidence: input.source === "corrected" ? 1 : input.source === "inferred" ? 0.6 : 0.9,
-      accessCount: 0
-    };
-    if (input.scope === "user" && input.context.userId) {
-      entry.userId = input.context.userId;
-    }
-    if ((input.scope === "file" || input.scope === "page") && input.context.fileKey) {
-      entry.fileKey = input.context.fileKey;
-      if (input.context.fileName) entry.fileName = input.context.fileName;
-    }
-    if (input.context.componentKey) {
-      entry.componentKey = input.context.componentKey;
-    }
-    if (existing) {
-      entry.relatedTo = [existing._id];
-    }
-    await this.memories.insertOne(entry);
-    if (existing) {
-      await this.memories.updateOne(
-        { _id: existing._id },
-        { $set: { supersededBy: entry._id } }
-      );
-    }
-    this.logger.debug("Memory stored", {
-      id: entry._id,
-      scope: entry.scope,
-      category: entry.category
-    });
-    return entry;
-  }
-  /** Query memories relevant to a topic. */
-  async recall(input) {
-    this.ensureConnected();
-    const filter = {};
-    if (input.scope) {
-      filter["scope"] = input.scope;
-    }
-    if (input.category) {
-      filter["category"] = input.category;
-    }
-    if (!input.includeSuperseded) {
-      filter["supersededBy"] = { $exists: false };
-    }
-    if (!input.scope) {
-      filter["$or"] = buildScopeFilter(input.context);
-    } else {
-      applyScopeKey(filter, input.scope, input.context);
-    }
-    if (input.componentKey) {
-      filter["componentKey"] = input.componentKey;
-    }
-    filter["confidence"] = { $gt: 0.1 };
-    const limit = input.limit ?? 10;
-    let cursor;
-    if (input.query) {
-      filter["$text"] = { $search: input.query };
-      cursor = this.memories.find(filter, {
-        projection: { score: { $meta: "textScore" } }
-      }).sort({ score: { $meta: "textScore" }, confidence: -1 }).limit(limit);
-    } else {
-      cursor = this.memories.find(filter).sort({ confidence: -1, lastAccessedAt: -1 }).limit(limit);
-    }
-    const results = await cursor.toArray();
-    if (results.length > 0) {
-      const ids = results.map((r) => r._id);
-      await this.memories.updateMany(
-        { _id: { $in: ids } },
-        {
-          $set: { lastAccessedAt: /* @__PURE__ */ new Date() },
-          $inc: { accessCount: 1 }
-        }
-      );
-    }
-    return results;
-  }
-  /** Delete a specific memory or memories matching a query. */
-  async forget(context, id, query, scope) {
-    this.ensureConnected();
-    if (id) {
-      const result = await this.memories.deleteOne({
-        _id: id
-      });
-      return result.deletedCount;
-    }
-    if (query) {
-      const filter = {
-        $text: { $search: query }
-      };
-      if (scope) {
-        filter["scope"] = scope;
-        applyScopeKey(filter, scope, context);
-      }
-      const result = await this.memories.deleteMany(filter);
-      return result.deletedCount;
-    }
-    return 0;
-  }
-  /** List memories with optional filters. */
-  async list(context, scope, category, limit, includeSuperseded) {
-    this.ensureConnected();
-    const filter = {};
-    if (scope) {
-      filter["scope"] = scope;
-      applyScopeKey(filter, scope, context);
-    } else {
-      filter["$or"] = buildScopeFilter(context);
-    }
-    if (category) {
-      filter["category"] = category;
-    }
-    if (!includeSuperseded) {
-      filter["supersededBy"] = { $exists: false };
-    }
-    return this.memories.find(filter).sort({ scope: 1, category: 1, confidence: -1 }).limit(limit ?? 20).toArray();
-  }
-  /** Load memories for a session (called on plugin connect). */
-  async loadForSession(context, maxEntries) {
-    this.ensureConnected();
-    const limit = maxEntries ?? this.config.maxMemoriesPerSession;
-    const filter = {
-      supersededBy: { $exists: false },
-      confidence: { $gt: 0.3 },
-      $or: buildScopeFilter(context)
-    };
-    const results = await this.memories.find(filter).sort({ confidence: -1, lastAccessedAt: -1 }).limit(limit).toArray();
-    if (results.length > 0) {
-      const ids = results.map((r) => r._id);
-      await this.memories.updateMany(
-        { _id: { $in: ids } },
-        {
-          $set: { lastAccessedAt: /* @__PURE__ */ new Date() },
-          $inc: { accessCount: 1 }
-        }
-      );
-      for (const entry of results) {
-        const newConfidence = Math.min(1, entry.confidence + 0.02);
-        if (newConfidence !== entry.confidence) {
-          await this.memories.updateOne(
-            { _id: entry._id },
-            { $set: { confidence: newConfidence } }
-          );
-        }
-      }
-    }
-    this.logger.debug("Loaded memories for session", {
-      count: results.length,
-      fileKey: context.fileKey
-    });
-    return results;
-  }
-  /** Clean up stale, low-confidence, and superseded memories. */
-  async cleanup(options) {
-    this.ensureConnected();
-    const dryRun = options?.dryRun ?? true;
-    const maxAgeDays = options?.maxAgeDays ?? 30;
-    const minConfidence = options?.minConfidence ?? 0.2;
-    const removeSuperseded = options?.removeSuperseded ?? true;
-    const now = /* @__PURE__ */ new Date();
-    const cutoffDate = new Date(now.getTime() - maxAgeDays * 24 * 60 * 60 * 1e3);
-    const staleFilter = {
-      createdAt: { $lt: cutoffDate },
-      accessCount: 0
-    };
-    const staleCount = await this.memories.countDocuments(staleFilter);
-    const lowConfFilter = {
-      confidence: { $lt: minConfidence },
-      supersededBy: { $exists: false }
-    };
-    const lowConfidenceCount = await this.memories.countDocuments(
-      lowConfFilter
-    );
-    let supersededCount = 0;
-    if (removeSuperseded) {
-      const supersededFilter = {
-        supersededBy: { $exists: true }
-      };
-      supersededCount = await this.memories.countDocuments(
-        supersededFilter
-      );
-    }
-    let totalRemoved = 0;
-    if (!dryRun) {
-      const r1 = await this.memories.deleteMany(staleFilter);
-      const r2 = await this.memories.deleteMany(lowConfFilter);
-      totalRemoved = r1.deletedCount + r2.deletedCount;
-      if (removeSuperseded) {
-        const r3 = await this.memories.deleteMany({
-          supersededBy: { $exists: true }
-        });
-        totalRemoved += r3.deletedCount;
-      }
-      this.logger.info("Memory cleanup completed", { totalRemoved });
-    }
-    return {
-      staleCount,
-      lowConfidenceCount,
-      supersededCount,
-      totalRemoved: dryRun ? 0 : totalRemoved,
-      dryRun
-    };
-  }
-  /** Apply confidence decay to all memories (call periodically). */
-  async applyDecay() {
-    this.ensureConnected();
-    const result = await this.memories.updateMany(
-      {
-        confidence: { $gt: 0.1 },
-        supersededBy: { $exists: false }
-      },
-      [
-        {
-          $set: {
-            confidence: {
-              $max: [
-                0.1,
-                {
-                  $subtract: [
-                    "$confidence",
-                    {
-                      $multiply: [
-                        0.01,
-                        {
-                          $divide: [
-                            { $subtract: [/* @__PURE__ */ new Date(), "$lastAccessedAt"] },
-                            864e5
-                            // ms per day
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            updatedAt: /* @__PURE__ */ new Date()
-          }
-        }
-      ]
-    );
-    return result.modifiedCount;
-  }
-  // ─── Private Methods ───────────────────────────────────────────────────────
-  ensureConnected() {
-    if (!this.memories) {
-      throw new Error(
-        "Memory store not connected. Set REX_MEMORY_ENABLED=true and ensure MongoDB is accessible."
-      );
-    }
-  }
-  /** Find an existing memory with similar content in the same scope. */
-  async findSimilar(content, scope, context) {
-    try {
-      const filter = {
-        scope,
-        supersededBy: { $exists: false },
-        $text: { $search: content }
-      };
-      applyScopeKey(filter, scope, context);
-      const results = await this.memories.find(filter, {
-        projection: { score: { $meta: "textScore" } }
-      }).sort({ score: { $meta: "textScore" } }).limit(1).toArray();
-      const result = results[0];
-      if (result && result.score > 2) {
-        return result;
-      }
-    } catch {
-    }
-    return null;
-  }
-};
-function buildScopeFilter(context) {
-  const conditions = [
-    { scope: "team" }
-    // Team memories always visible
-  ];
-  if (context.userId) {
-    conditions.push({ scope: "user", userId: context.userId });
-  }
-  if (context.fileKey) {
-    conditions.push({ scope: "file", fileKey: context.fileKey });
-    if (context.pageId) {
-      conditions.push({
-        scope: "page",
-        fileKey: context.fileKey,
-        pageId: context.pageId
-      });
-    }
-  }
-  return conditions;
-}
-function applyScopeKey(filter, scope, context) {
-  switch (scope) {
-    case "user":
-      if (context.userId) filter["userId"] = context.userId;
-      break;
-    case "file":
-      if (context.fileKey) filter["fileKey"] = context.fileKey;
-      break;
-    case "page":
-      if (context.fileKey) filter["fileKey"] = context.fileKey;
-      if (context.pageId) filter["pageId"] = context.pageId;
-      break;
-  }
-}
-function generateId() {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "mem_";
-  for (let i = 0; i < 16; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-}
-
 // src/memory/client.ts
 var MemoryServiceClient = class {
   baseUrl;
   logger;
   _connected = false;
+  _connecting = null;
   constructor(baseUrl, logger) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.logger = logger.child({ component: "memory-client" });
   }
   get isConnected() {
     return this._connected;
+  }
+  get url() {
+    return this.baseUrl;
   }
   async connect() {
     try {
@@ -1335,16 +929,34 @@ var MemoryServiceClient = class {
       });
     }
   }
+  /**
+   * Ensure the client is connected, retrying if the initial connect failed.
+   * Called lazily before each memory operation.
+   */
+  async ensureConnected() {
+    if (this._connected) return true;
+    if (this._connecting) {
+      await this._connecting;
+      return this._connected;
+    }
+    this._connecting = this.connect();
+    try {
+      await this._connecting;
+    } finally {
+      this._connecting = null;
+    }
+    return this._connected;
+  }
   async disconnect() {
     this._connected = false;
   }
   async remember(input) {
     const resp = await this.post("/api/memories", input);
-    return resp.memory;
+    return normalizeEntry(resp.memory);
   }
   async recall(input) {
     const resp = await this.post("/api/memories/recall", input);
-    return resp.memories ?? [];
+    return normalizeEntries(resp.memories);
   }
   async forget(context, id, query, scope) {
     const resp = await this.post("/api/memories/forget", {
@@ -1363,14 +975,14 @@ var MemoryServiceClient = class {
       limit,
       includeSuperseded
     });
-    return resp.memories ?? [];
+    return normalizeEntries(resp.memories);
   }
   async loadForSession(context, maxEntries) {
     const resp = await this.post("/api/memories/session", {
       context,
       maxEntries
     });
-    return resp.memories ?? [];
+    return normalizeEntries(resp.memories);
   }
   async cleanup(options) {
     return this.post("/api/memories/cleanup", {
@@ -1380,6 +992,127 @@ var MemoryServiceClient = class {
   async applyDecay() {
     const resp = await this.post("/api/memories/decay", {});
     return resp.modified ?? 0;
+  }
+  // ─── Chat History ─────────────────────────────────────────────────────────
+  /**
+   * Persist a chat message to the memory service. Fire-and-forget — caller
+   * should not await this and should catch errors.
+   */
+  async saveChatMessage(entry, context) {
+    const connected = await this.ensureConnected();
+    if (!connected) return;
+    const truncatedMessage = entry.message.length > 2e3 ? entry.message.slice(0, 2e3) : entry.message;
+    await this.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify({ ...entry, message: truncatedMessage }),
+      tags: ["chat-history", entry.role],
+      source: "explicit",
+      context
+    });
+  }
+  /**
+   * Retrieve chat history for a file, sorted by timestamp ascending.
+   */
+  async getChatHistory(context, limit = 20) {
+    const connected = await this.ensureConnected();
+    if (!connected) return [];
+    const entries = await this.recall({
+      query: "chat-history",
+      scope: "file",
+      category: "context",
+      context,
+      limit: limit * 2
+      // Over-fetch to account for non-chat entries
+    });
+    const chatEntries = [];
+    for (const entry of entries) {
+      if (!entry.tags?.includes("chat-history")) continue;
+      try {
+        const parsed = JSON.parse(entry.content);
+        chatEntries.push(parsed);
+      } catch {
+      }
+    }
+    chatEntries.sort((a, b) => a.timestamp - b.timestamp);
+    return chatEntries.slice(-limit);
+  }
+  // ─── Chat Sessions ──────────────────────────────────────────────────────────
+  /** Create a new chat session. */
+  async createSession(session, context) {
+    const connected = await this.ensureConnected();
+    if (!connected) return;
+    await this.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify(session),
+      tags: ["chat-session", session.sessionId],
+      source: "explicit",
+      context
+    });
+  }
+  /** List recent chat sessions for the current file, sorted by lastMessageAt descending. */
+  async listSessions(context, limit = 20) {
+    const connected = await this.ensureConnected();
+    if (!connected) return [];
+    const entries = await this.recall({
+      query: "chat-session",
+      scope: "file",
+      category: "context",
+      context,
+      limit: limit * 5
+    });
+    const sessionMap = /* @__PURE__ */ new Map();
+    for (const entry of entries) {
+      if (!entry.tags?.includes("chat-session")) continue;
+      try {
+        const parsed = JSON.parse(entry.content);
+        const existing = sessionMap.get(parsed.sessionId);
+        if (!existing || parsed.lastMessageAt > existing.lastMessageAt) {
+          sessionMap.set(parsed.sessionId, parsed);
+        }
+      } catch {
+      }
+    }
+    const sessions = Array.from(sessionMap.values());
+    sessions.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+    return sessions.slice(0, limit);
+  }
+  /** Update a session's metadata (name, summary, messageCount, lastMessageAt). */
+  async updateSession(session, context) {
+    const connected = await this.ensureConnected();
+    if (!connected) return;
+    await this.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify(session),
+      tags: ["chat-session", session.sessionId],
+      source: "explicit",
+      context
+    });
+  }
+  /** Get messages for a specific session, sorted by timestamp ascending. */
+  async getSessionMessages(sessionId, context, limit = 50) {
+    const connected = await this.ensureConnected();
+    if (!connected) return [];
+    const entries = await this.recall({
+      query: sessionId,
+      scope: "file",
+      category: "context",
+      context,
+      limit: limit * 3
+    });
+    const messages = [];
+    for (const entry of entries) {
+      if (!entry.tags?.includes("chat-message") || !entry.tags?.includes(sessionId)) continue;
+      try {
+        const parsed = JSON.parse(entry.content);
+        messages.push(parsed);
+      } catch {
+      }
+    }
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+    return messages.slice(-limit);
   }
   // ─── HTTP Helpers ──────────────────────────────────────────────────────────
   async post(path2, body) {
@@ -1404,16 +1137,24 @@ var MemoryServiceClient = class {
     }
   }
 };
+function normalizeEntry(raw) {
+  if (raw.id && !raw._id) {
+    raw._id = raw.id;
+  }
+  return raw;
+}
+function normalizeEntries(raw) {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.map(normalizeEntry);
+}
 
 // src/memory/config.ts
-var DEFAULT_SERVICE_URL = "https://aux.frostdesigngroup.com/rex";
+var SERVICE_URL = "https://aux.frostdesigngroup.com/rex";
 function loadMemoryConfig() {
   const disabled = process.env["REX_MEMORY_ENABLED"] === "false" || process.env["REX_MEMORY_ENABLED"] === "0";
   return {
     enabled: !disabled,
-    serviceUrl: process.env["REX_MEMORY_SERVICE_URL"] ?? DEFAULT_SERVICE_URL,
-    mongoUri: process.env["REX_MEMORY_MONGO_URI"] ?? "mongodb://localhost:27017",
-    dbName: process.env["REX_MEMORY_DB_NAME"] ?? "rex",
+    serviceUrl: process.env["REX_MEMORY_URL"] ?? SERVICE_URL,
     maxMemoriesPerSession: parseInt(
       process.env["REX_MEMORY_MAX_PER_SESSION"] ?? "30",
       10
@@ -1426,7 +1167,7 @@ function loadMemoryConfig() {
 }
 
 // src/relay/server.ts
-var VERSION = "0.1.0";
+var VERSION = "0.3.0";
 var RelayServer = class {
   config;
   logger;
@@ -1438,16 +1179,55 @@ var RelayServer = class {
   wsClient = null;
   startTime = 0;
   pollingState = { lastCommandTime: 0 };
-  // Chat message queue (plugin → MCP server)
+  _boundPort = 0;
+  /** The port the relay actually bound to (may differ from config if port was in use). */
+  get boundPort() {
+    return this._boundPort;
+  }
+  // Chat message queue (plugin → MCP server) — bounded FIFO queue
+  CHAT_INBOX_MAX = 50;
   chatInbox = [];
   chatWaiters = [];
-  // Chat response queue (MCP server → plugin)
+  // Chat response queue (MCP server → plugin) — bounded
+  CHAT_OUTBOX_MAX = 50;
   chatOutbox = [];
   // Comment watcher for @rex mentions
   commentWatcher;
   // Memory system
   memoryConfig;
   _memoryStore = null;
+  // Stream accumulator for persisting complete streaming responses
+  streamAccumulator = /* @__PURE__ */ new Map();
+  // Active chat session for session-based conversations
+  _activeChatSession = null;
+  /** The active chat session ID (null if no session selected). */
+  get activeChatSessionId() {
+    return this._activeChatSession?.sessionId ?? null;
+  }
+  /** The active chat session name. */
+  get activeChatSessionName() {
+    return this._activeChatSession?.name ?? null;
+  }
+  /** Update the active session's name (called when Claude names a session). */
+  updateChatSessionName(name) {
+    if (!this._activeChatSession) return;
+    this._activeChatSession.name = name;
+    this.logger.info("Chat session renamed", { sessionId: this._activeChatSession.sessionId, name });
+    if (this._memoryStore && this.connection.session) {
+      const pluginSession = this.connection.session;
+      const ctx = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name
+      };
+      this._memoryStore.updateSession(this._activeChatSession, ctx).catch((err) => {
+        this.logger.warn("Failed to persist session name", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+      });
+    }
+  }
   /** Access the memory store (null if disabled/not connected). */
   get memoryStore() {
     return this._memoryStore;
@@ -1496,7 +1276,7 @@ var RelayServer = class {
    */
   async start() {
     this.startTime = Date.now();
-    const { host, port } = this.config.relay;
+    const { host } = this.config.relay;
     this.fastify = Fastify({
       logger: false,
       // We use our own logger
@@ -1512,7 +1292,7 @@ var RelayServer = class {
       }
     });
     this.registerRoutes(this.fastify);
-    await this.fastify.listen({ host, port });
+    const port = await this.bindToAvailablePort(host);
     if (this.config.websocket.enabled) {
       const httpServer = this.fastify.server;
       this.wss = new WebSocketServer({ noServer: true });
@@ -1521,7 +1301,7 @@ var RelayServer = class {
       });
       this.logger.info("WebSocket server ready on upgrade path /ws");
     }
-    if (this.memoryConfig.serviceUrl) {
+    if (this.memoryConfig.enabled) {
       this._memoryStore = new MemoryServiceClient(
         this.memoryConfig.serviceUrl,
         this.logger
@@ -1531,15 +1311,44 @@ var RelayServer = class {
           error: err instanceof Error ? err.message : String(err)
         });
       });
-    } else if (this.memoryConfig.enabled) {
-      this._memoryStore = new MemoryStore(this.memoryConfig, this.logger);
-      this._memoryStore.connect().catch((err) => {
-        this.logger.warn("Memory store connection failed (non-fatal)", {
-          error: err instanceof Error ? err.message : String(err)
-        });
-      });
     }
     this.logger.info("Relay server started", { host, port });
+  }
+  /**
+   * Try each port in the configured range until one binds successfully.
+   * If port is 0 (test mode), let the OS assign a random port.
+   * Returns the port that was bound.
+   */
+  async bindToAvailablePort(host) {
+    const { port: preferredPort, portRangeStart, portRangeEnd } = this.config.relay;
+    if (preferredPort === 0) {
+      await this.fastify.listen({ host, port: 0 });
+      const addr = this.fastify.server.address();
+      this._boundPort = typeof addr === "object" && addr ? addr.port : 0;
+      return this._boundPort;
+    }
+    const start = portRangeStart ?? preferredPort;
+    const end = portRangeEnd ?? preferredPort;
+    for (let port = start; port <= end; port++) {
+      try {
+        await this.fastify.listen({ host, port });
+        this._boundPort = port;
+        return port;
+      } catch (err) {
+        const code = err.code;
+        if (code === "EADDRINUSE") {
+          this.logger.debug("Port in use, trying next", { port });
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new RexError({
+      category: "INTERNAL_ERROR" /* INTERNAL_ERROR */,
+      message: `All Rex relay ports (${start}\u2013${end}) are in use`,
+      retryable: false,
+      suggestion: "Close an existing Rex session to free a port."
+    });
   }
   /**
    * Stop the relay server gracefully.
@@ -1561,11 +1370,8 @@ var RelayServer = class {
     this.chatWaiters = [];
     this.chatInbox = [];
     this.chatOutbox = [];
-    if (this.chatListeningGraceTimer) {
-      clearTimeout(this.chatListeningGraceTimer);
-      this.chatListeningGraceTimer = null;
-    }
-    this._chatListening = false;
+    this.streamAccumulator.clear();
+    this._activeChatSession = null;
     this.commentWatcher.stop();
     this.heartbeat.destroy();
     this.queue.destroy();
@@ -1611,83 +1417,94 @@ var RelayServer = class {
   get isActive() {
     return this._activityState;
   }
-  /** Whether wait_for_chat is actively listening (for plugin to show/hide chat button). */
-  _chatListening = false;
-  chatListeningGraceTimer = null;
-  get chatListening() {
-    return this._chatListening;
-  }
-  setChatListening(listening) {
-    if (this.chatListeningGraceTimer) {
-      clearTimeout(this.chatListeningGraceTimer);
-      this.chatListeningGraceTimer = null;
-    }
-    if (this._chatListening === listening) return;
-    this._chatListening = listening;
-    if (this.wsClient?.readyState === WebSocket.OPEN) {
-      const msg = {
-        type: "command",
-        id: "chat-listening",
-        payload: { listening },
-        timestamp: Date.now()
-      };
-      this.wsClient.send(JSON.stringify(msg));
-    }
-  }
-  /**
-   * Schedule chatListening = false after a grace period.
-   * Cancelled if wait_for_chat is called again before it fires.
-   */
-  scheduleChatListeningTimeout() {
-    if (this.chatListeningGraceTimer) {
-      clearTimeout(this.chatListeningGraceTimer);
-    }
-    this.chatListeningGraceTimer = setTimeout(() => {
-      this.chatListeningGraceTimer = null;
-      if (this.chatWaiters.length === 0 && this.activeToolCount > 0) {
-        this.scheduleChatListeningTimeout();
-        return;
-      }
-      if (this.chatWaiters.length === 0) {
-        this.setChatListening(false);
-      }
-    }, 5e3);
-  }
+  // Chat is always available when server is running — messages queue in the bounded inbox.
+  // The old chatListening state machine has been removed. Plugin always shows chat as available.
   // ─── Chat Infrastructure ──────────────────────────────────────────────
   /**
    * Called by the plugin to send a chat message.
-   * If an MCP tool is long-polling (via wait_for_chat), resolve it immediately.
+   * Queue-first: message always enters the bounded FIFO inbox.
+   * If a waiter exists, it consumes from the queue immediately.
    */
   enqueueChatMessage(msg) {
+    this.persistChatMessage({
+      id: msg.id,
+      role: "user",
+      message: msg.message,
+      timestamp: msg.timestamp,
+      fileKey: this.connection.session?.fileKey ?? "",
+      selection: msg.selection
+    });
     const waiter = this.chatWaiters.shift();
     if (waiter) {
       clearTimeout(waiter.timer);
       waiter.resolve(msg);
-      if (this.chatWaiters.length === 0) {
-        this.scheduleChatListeningTimeout();
-      }
       return;
+    }
+    if (this.chatInbox.length >= this.CHAT_INBOX_MAX) {
+      const dropped = this.chatInbox.shift();
+      this.logger.warn("Chat inbox overflow \u2014 dropped oldest message", { droppedId: dropped?.id });
     }
     this.chatInbox.push(msg);
   }
+  /** Number of pending chat messages in the inbox. */
+  get pendingChatCount() {
+    return this.chatInbox.length;
+  }
+  /** Persist a chat message to the remote memory service (fire-and-forget). */
+  persistChatMessage(entry) {
+    if (!this._memoryStore || !this.connection.session) return;
+    const pluginSession = this.connection.session;
+    const ctx = {
+      fileKey: pluginSession.fileKey,
+      fileName: pluginSession.fileName,
+      userId: pluginSession.user?.id,
+      userName: pluginSession.user?.name
+    };
+    const chatSession = this._activeChatSession;
+    if (chatSession) {
+      entry.sessionId = chatSession.sessionId;
+    }
+    const tags = chatSession ? ["chat-message", chatSession.sessionId] : ["chat-history", entry.role];
+    this._memoryStore.remember({
+      scope: "file",
+      category: "context",
+      content: JSON.stringify(entry.message.length > 2e3 ? { ...entry, message: entry.message.slice(0, 2e3) } : entry),
+      tags,
+      source: "explicit",
+      context: ctx
+    }).catch((err) => {
+      this.logger.warn("Failed to persist chat message", {
+        id: entry.id,
+        error: err instanceof Error ? err.message : String(err)
+      });
+    });
+    if (chatSession) {
+      chatSession.messageCount++;
+      chatSession.lastMessageAt = entry.timestamp;
+      chatSession.summary = entry.message.slice(0, 100);
+      if (this._memoryStore) {
+        this._memoryStore.updateSession(chatSession, ctx).catch((err) => {
+          this.logger.warn("Failed to update chat session", {
+            sessionId: chatSession.sessionId,
+            error: err instanceof Error ? err.message : String(err)
+          });
+        });
+      }
+    }
+  }
   /**
-   * Called by the MCP tool `wait_for_chat` to long-poll for a message.
-   * Returns immediately if there's a queued message, otherwise waits up to timeoutMs.
+   * Called by the MCP tool `wait_for_chat` to consume a message from the queue.
+   * Returns immediately if messages are queued, otherwise waits up to timeoutMs.
    */
   waitForChatMessage(timeoutMs) {
     const queued = this.chatInbox.shift();
     if (queued) {
-      this.setChatListening(true);
       return Promise.resolve(queued);
     }
-    this.setChatListening(true);
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         const idx = this.chatWaiters.findIndex((w) => w.resolve === resolve);
         if (idx >= 0) this.chatWaiters.splice(idx, 1);
-        if (this.chatWaiters.length === 0) {
-          this.scheduleChatListeningTimeout();
-        }
         resolve(null);
       }, timeoutMs);
       this.chatWaiters.push({ resolve, timer });
@@ -1698,7 +1515,21 @@ var RelayServer = class {
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
   sendChatResponse(response) {
+    if (!response.isError) {
+      this.persistChatMessage({
+        id: response.id,
+        role: "assistant",
+        message: response.message,
+        timestamp: response.timestamp,
+        fileKey: this.connection.session?.fileKey ?? ""
+      });
+    }
+    if (this.chatOutbox.length >= this.CHAT_OUTBOX_MAX) {
+      const dropped = this.chatOutbox.shift();
+      this.logger.warn("Chat outbox overflow \u2014 dropped oldest response", { droppedId: dropped?.id });
+    }
     this.chatOutbox.push(response);
+    this.logger.debug("Chat response queued for delivery", { id: response.id, outboxSize: this.chatOutbox.length });
     if (this.wsClient?.readyState === WebSocket.OPEN) {
       try {
         const msg = {
@@ -1708,8 +1539,12 @@ var RelayServer = class {
           timestamp: Date.now()
         };
         this.wsClient.send(JSON.stringify(msg));
+        this.logger.debug("Chat response also sent via WebSocket", { id: response.id });
       } catch {
+        this.logger.warn("Chat response WS send failed \u2014 HTTP polling will deliver", { id: response.id });
       }
+    } else {
+      this.logger.debug("Chat response WS unavailable \u2014 HTTP polling only", { id: response.id });
     }
   }
   /**
@@ -1717,8 +1552,21 @@ var RelayServer = class {
    * Delivers via WebSocket if connected, otherwise queues for HTTP polling.
    */
   sendChatChunk(chunk) {
-    this.chatOutbox.push({ id: chunk.id, message: chunk.delta, timestamp: chunk.timestamp, _isChunk: true, _done: chunk.done });
-    if (this.wsClient?.readyState === WebSocket.OPEN) {
+    const acc = this.streamAccumulator.get(chunk.id) ?? "";
+    this.streamAccumulator.set(chunk.id, acc + chunk.delta);
+    if (chunk.done) {
+      const fullText = this.streamAccumulator.get(chunk.id) ?? "";
+      this.streamAccumulator.delete(chunk.id);
+      this.persistChatMessage({
+        id: chunk.id,
+        role: "assistant",
+        message: fullText,
+        timestamp: chunk.timestamp,
+        fileKey: this.connection.session?.fileKey ?? ""
+      });
+    }
+    const wsOpen = this.wsClient?.readyState === WebSocket.OPEN;
+    if (wsOpen) {
       try {
         const msg = {
           type: "command",
@@ -1727,9 +1575,11 @@ var RelayServer = class {
           timestamp: Date.now()
         };
         this.wsClient.send(JSON.stringify(msg));
+        return;
       } catch {
       }
     }
+    this.chatOutbox.push({ id: chunk.id, message: chunk.delta, timestamp: chunk.timestamp, _isChunk: true, _done: chunk.done });
   }
   /**
    * Get and drain pending chat responses for the plugin (called during HTTP polling).
@@ -1737,14 +1587,27 @@ var RelayServer = class {
   drainChatResponses() {
     const responses = [...this.chatOutbox];
     this.chatOutbox = [];
+    if (responses.length > 0) {
+      this.logger.debug("Chat responses drained for HTTP delivery", {
+        count: responses.length,
+        ids: responses.map((r) => r.id)
+      });
+    }
     return responses;
   }
   /**
    * Send a command to the plugin.
    * Uses WebSocket if connected, otherwise queues for HTTP polling.
+   * Pauses heartbeat while command is in-flight — the plugin is single-threaded
+   * and cannot respond to pings during figma.* execution.
    */
   sendCommand(command) {
+    this.heartbeat.pauseWsHeartbeat();
     const promise = this.queue.enqueue(command);
+    promise.then(
+      () => this.heartbeat.resumeWsHeartbeat(),
+      () => this.heartbeat.resumeWsHeartbeat()
+    );
     if (this.connection.isWebSocketActive && this.wsClient?.readyState === WebSocket.OPEN) {
       this.pushCommandViaWs(command);
     }
@@ -1812,6 +1675,196 @@ var RelayServer = class {
         return void 0;
       }
       return { responses };
+    });
+    app.get("/chat/history", {
+      preHandler: authHook
+    }, async (_req, _reply) => {
+      if (!this._memoryStore || !this.connection.session) {
+        return { messages: [] };
+      }
+      try {
+        const ctx = {
+          fileKey: this.connection.session.fileKey,
+          fileName: this.connection.session.fileName,
+          userId: this.connection.session.user?.id,
+          userName: this.connection.session.user?.name
+        };
+        const messages = this._activeChatSession ? await this._memoryStore.getSessionMessages(this._activeChatSession.sessionId, ctx, 50) : await this._memoryStore.getChatHistory(ctx, 20);
+        return { messages };
+      } catch (err) {
+        this.logger.warn("Failed to fetch chat history", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        return { messages: [] };
+      }
+    });
+    app.post("/session/create", {
+      preHandler: authHook
+    }, async (_req, _reply) => {
+      const pluginSession = this.connection.session;
+      if (!this._memoryStore || !pluginSession) {
+        return { error: "Not connected" };
+      }
+      const now = Date.now();
+      const session = {
+        sessionId: "sess_chat_" + now,
+        name: "New Session",
+        summary: "",
+        fileKey: pluginSession.fileKey,
+        createdAt: now,
+        lastMessageAt: now,
+        messageCount: 0
+      };
+      const ctx = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name
+      };
+      try {
+        await this._memoryStore.createSession(session, ctx);
+        this._activeChatSession = session;
+        this.logger.info("Chat session created", { sessionId: session.sessionId });
+        return { session };
+      } catch (err) {
+        this.logger.warn("Failed to create chat session", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        this._activeChatSession = session;
+        return { session };
+      }
+    });
+    app.get("/sessions", {
+      preHandler: authHook
+    }, async (_req, _reply) => {
+      const pluginSession = this.connection.session;
+      if (!this._memoryStore || !pluginSession) {
+        return { sessions: [] };
+      }
+      try {
+        const ctx = {
+          fileKey: pluginSession.fileKey,
+          fileName: pluginSession.fileName,
+          userId: pluginSession.user?.id,
+          userName: pluginSession.user?.name
+        };
+        const sessions = await this._memoryStore.listSessions(ctx, 20);
+        return { sessions };
+      } catch (err) {
+        this.logger.warn("Failed to list sessions", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        return { sessions: [] };
+      }
+    });
+    app.post("/session/select", {
+      preHandler: authHook
+    }, async (req, _reply) => {
+      const body = req.body;
+      const pluginSession = this.connection.session;
+      if (!body?.sessionId || !this._memoryStore || !pluginSession) {
+        return { error: "Missing sessionId or not connected" };
+      }
+      const ctx = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name
+      };
+      try {
+        const messages = await this._memoryStore.getSessionMessages(body.sessionId, ctx, 50);
+        const sessions = await this._memoryStore.listSessions(ctx, 50);
+        const session = sessions.find((s) => s.sessionId === body.sessionId);
+        if (session) {
+          this._activeChatSession = session;
+        } else {
+          this._activeChatSession = {
+            sessionId: body.sessionId,
+            name: "Session",
+            summary: "",
+            fileKey: pluginSession.fileKey,
+            createdAt: Date.now(),
+            lastMessageAt: Date.now(),
+            messageCount: messages.length
+          };
+        }
+        this.logger.info("Chat session selected", { sessionId: body.sessionId, messageCount: messages.length });
+        return { messages, sessionName: this._activeChatSession.name };
+      } catch (err) {
+        this.logger.warn("Failed to select session", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        return { messages: [], sessionName: "Session" };
+      }
+    });
+    app.post("/session/resume", {
+      preHandler: authHook
+    }, async (req, _reply) => {
+      const body = req.body;
+      const pluginSession = this.connection.session;
+      if (!body?.sessionId || !pluginSession) {
+        return { status: "no-op" };
+      }
+      if (this._activeChatSession) {
+        return { status: "already-active", sessionId: this._activeChatSession.sessionId };
+      }
+      const ctx = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name
+      };
+      if (this._memoryStore) {
+        try {
+          const sessions = await this._memoryStore.listSessions(ctx, 50);
+          const found = sessions.find((s) => s.sessionId === body.sessionId);
+          if (found) {
+            this._activeChatSession = found;
+            this.logger.info("Chat session resumed", { sessionId: found.sessionId, name: found.name });
+            return { status: "resumed", sessionId: found.sessionId, name: found.name };
+          }
+        } catch {
+        }
+      }
+      this._activeChatSession = {
+        sessionId: body.sessionId,
+        name: "Resumed Session",
+        summary: "",
+        fileKey: pluginSession.fileKey,
+        createdAt: Date.now(),
+        lastMessageAt: Date.now(),
+        messageCount: 0
+      };
+      this.logger.info("Chat session resumed (minimal)", { sessionId: body.sessionId });
+      return { status: "resumed", sessionId: body.sessionId };
+    });
+    app.post("/session/delete", {
+      preHandler: authHook
+    }, async (req, _reply) => {
+      const body = req.body;
+      const pluginSession = this.connection.session;
+      if (!body?.sessionId || !this._memoryStore || !pluginSession) {
+        return { error: "Missing sessionId or not connected" };
+      }
+      const ctx = {
+        fileKey: pluginSession.fileKey,
+        fileName: pluginSession.fileName,
+        userId: pluginSession.user?.id,
+        userName: pluginSession.user?.name
+      };
+      try {
+        const deleted = await this._memoryStore.forget(ctx, void 0, body.sessionId, "file");
+        if (this._activeChatSession?.sessionId === body.sessionId) {
+          this._activeChatSession = null;
+        }
+        this.logger.info("Chat session deleted", { sessionId: body.sessionId, deleted });
+        return { status: "deleted", sessionId: body.sessionId, deleted };
+      } catch (err) {
+        this.logger.warn("Failed to delete session", {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        return { error: "Failed to delete session" };
+      }
     });
   }
   // ─── Route Handlers ────────────────────────────────────────────────────
@@ -1888,8 +1941,8 @@ var RelayServer = class {
     const pending = this.queue.getPending();
     if (pending.length === 0) {
       const chatResponses2 = this.drainChatResponses();
-      if (this.isActive || chatResponses2.length > 0 || this.chatListening) {
-        return { commands: [], activity: this.isActive, chatResponses: chatResponses2, chatListening: this.chatListening };
+      if (this.isActive || chatResponses2.length > 0 || this.pendingChatCount > 0) {
+        return { commands: [], activity: this.isActive, chatResponses: chatResponses2, pendingChat: this.pendingChatCount, sessionName: this._activeChatSession?.name ?? null };
       }
       reply.code(204);
       return void 0;
@@ -1909,7 +1962,8 @@ var RelayServer = class {
       pollingInterval: suggestedInterval,
       activity: this.isActive,
       chatResponses,
-      chatListening: this.chatListening,
+      pendingChat: this.pendingChatCount,
+      sessionName: this._activeChatSession?.name ?? null,
       queueDepth: remainingStats.pending + remainingStats.inFlight
     };
   }
@@ -2621,7 +2675,8 @@ var waitForChatSchema = z.object({
 var sendChatResponseSchema = z.object({
   messageId: z.string(),
   message: z.string(),
-  isError: z.boolean().optional()
+  isError: z.boolean().optional(),
+  sessionName: z.string().max(60).optional()
 });
 var sendChatChunkSchema = z.object({
   messageId: z.string(),
@@ -2638,36 +2693,36 @@ var memoryCategoryEnum = z.enum([
   "preference",
   "correction"
 ]);
-var rememberSchema = z.object({
-  content: z.string().describe("What to remember \u2014 a design decision, convention, or context"),
-  scope: memoryScopeEnum.optional().describe("Memory scope: user (personal), team (shared), file, or page. Default: file"),
-  category: memoryCategoryEnum.optional().describe("Memory category. Default: convention"),
+var noteSchema = z.object({
+  content: z.string().describe("What to note \u2014 a design decision, convention, or context"),
+  scope: memoryScopeEnum.optional().describe("Note scope: user (personal), team (shared), file, or page. Default: file"),
+  category: memoryCategoryEnum.optional().describe("Note category. Default: convention"),
   tags: z.array(z.string()).optional().describe("Semantic tags for retrieval"),
   componentKey: z.string().optional().describe("Figma component key \u2014 stable reference for design system components")
 });
-var recallSchema = z.object({
-  query: z.string().describe("What to recall \u2014 topic or keyword"),
+var notesSchema = z.object({
+  query: z.string().describe("What to look up \u2014 topic or keyword"),
   scope: memoryScopeEnum.optional().describe("Filter by scope"),
   category: memoryCategoryEnum.optional().describe("Filter by category"),
   componentKey: z.string().optional().describe("Filter by Figma component key"),
   limit: z.number().int().min(1).max(50).optional().describe("Max results (default: 10)")
 });
-var forgetSchema = z.object({
-  id: z.string().optional().describe("Specific memory ID to delete"),
-  query: z.string().optional().describe("Delete memories matching this query"),
+var removeNoteSchema = z.object({
+  id: z.string().optional().describe("Specific note ID to delete"),
+  query: z.string().optional().describe("Delete notes matching this query"),
   scope: memoryScopeEnum.optional().describe("Scope filter for query-based deletion")
 });
-var memoriesSchema = z.object({
+var browseNotesSchema = z.object({
   scope: memoryScopeEnum.optional().describe("Filter by scope"),
   category: memoryCategoryEnum.optional().describe("Filter by category"),
   limit: z.number().int().min(1).max(100).optional().describe("Max results (default: 20)"),
-  includeSuperseded: z.boolean().optional().describe("Include superseded memories (default: false)")
+  includeSuperseded: z.boolean().optional().describe("Include superseded notes (default: false)")
 });
-var memoryCleanupSchema = z.object({
+var cleanupNotesSchema = z.object({
   dryRun: z.boolean().optional().describe("Preview what would be removed (default: true)"),
-  maxAgeDays: z.number().int().min(1).optional().describe("Remove memories older than N days with 0 access (default: 30)"),
-  minConfidence: z.number().min(0).max(1).optional().describe("Remove memories below this confidence (default: 0.2)"),
-  removeSuperseded: z.boolean().optional().describe("Remove superseded memories (default: true)")
+  maxAgeDays: z.number().int().min(1).optional().describe("Remove notes older than N days with 0 access (default: 30)"),
+  minConfidence: z.number().min(0).max(1).optional().describe("Remove notes below this confidence (default: 0.2)"),
+  removeSuperseded: z.boolean().optional().describe("Remove superseded notes (default: true)")
 });
 var schemaRegistry = {
   // Read tools
@@ -2734,12 +2789,12 @@ var schemaRegistry = {
   wait_for_chat: waitForChatSchema,
   send_chat_response: sendChatResponseSchema,
   send_chat_chunk: sendChatChunkSchema,
-  // Memory
-  remember: rememberSchema,
-  recall: recallSchema,
-  forget: forgetSchema,
-  memories: memoriesSchema,
-  memory_cleanup: memoryCleanupSchema
+  // Notes
+  note: noteSchema,
+  notes: notesSchema,
+  remove_note: removeNoteSchema,
+  browse_notes: browseNotesSchema,
+  cleanup_notes: cleanupNotesSchema
 };
 
 // src/server/tool-router.ts
@@ -2810,16 +2865,16 @@ var TOOL_ROUTES = {
   wait_for_chat: { category: "local" },
   send_chat_response: { category: "local" },
   send_chat_chunk: { category: "local" },
-  // ── Memory Tools ──────────────────────────────────────────────────────────
-  remember: { category: "local" },
-  recall: { category: "local" },
-  forget: { category: "local" },
-  memories: { category: "local" },
-  memory_cleanup: { category: "local" }
+  // ── Note Tools ───────────────────────────────────────────────────────────
+  note: { category: "local" },
+  notes: { category: "local" },
+  remove_note: { category: "local" },
+  browse_notes: { category: "local" },
+  cleanup_notes: { category: "local" }
 };
 async function handleGetStyles(params, context) {
-  const { getFile } = await import("./rest-api-SQKXROZS.js");
-  const { FigmaClient: FigmaClient2 } = await import("./rest-api-SQKXROZS.js");
+  const { getFile } = await import("./rest-api-DCR76CZK.js");
+  const { FigmaClient: FigmaClient2 } = await import("./rest-api-DCR76CZK.js");
   const client = new FigmaClient2({ config: context.config, logger: context.logger });
   const connectionInfo = context.relay.connection.getConnectionInfo();
   const fileKey = connectionInfo.fileKey;
@@ -2840,8 +2895,8 @@ async function handleGetStyles(params, context) {
   return { styles: result };
 }
 async function handleGetVariables(params, context) {
-  const { getLocalVariables } = await import("./rest-api-SQKXROZS.js");
-  const { FigmaClient: FigmaClient2 } = await import("./rest-api-SQKXROZS.js");
+  const { getLocalVariables } = await import("./rest-api-DCR76CZK.js");
+  const { FigmaClient: FigmaClient2 } = await import("./rest-api-DCR76CZK.js");
   const client = new FigmaClient2({ config: context.config, logger: context.logger });
   const connectionInfo = context.relay.connection.getConnectionInfo();
   const fileKey = connectionInfo.fileKey;
@@ -2887,8 +2942,8 @@ async function handleGetVariables(params, context) {
   };
 }
 async function handleGetComponents(params, context) {
-  const { getFileComponents, getFileComponentSets } = await import("./rest-api-SQKXROZS.js");
-  const { FigmaClient: FigmaClient2 } = await import("./rest-api-SQKXROZS.js");
+  const { getFileComponents, getFileComponentSets } = await import("./rest-api-DCR76CZK.js");
+  const { FigmaClient: FigmaClient2 } = await import("./rest-api-DCR76CZK.js");
   const client = new FigmaClient2({ config: context.config, logger: context.logger });
   const connectionInfo = context.relay.connection.getConnectionInfo();
   const fileKey = connectionInfo.fileKey;
@@ -2924,8 +2979,8 @@ async function handleGetComponents(params, context) {
   return result;
 }
 async function handlePostComment(params, context) {
-  const { postComment } = await import("./rest-api-SQKXROZS.js");
-  const { FigmaClient: FigmaClient2 } = await import("./rest-api-SQKXROZS.js");
+  const { postComment } = await import("./rest-api-DCR76CZK.js");
+  const { FigmaClient: FigmaClient2 } = await import("./rest-api-DCR76CZK.js");
   const client = new FigmaClient2({ config: context.config, logger: context.logger });
   const connectionInfo = context.relay.connection.getConnectionInfo();
   const fileKey = connectionInfo.fileKey;
@@ -2945,8 +3000,8 @@ async function handlePostComment(params, context) {
   return response;
 }
 async function handleDeleteComment(params, context) {
-  const { deleteComment } = await import("./rest-api-SQKXROZS.js");
-  const { FigmaClient: FigmaClient2 } = await import("./rest-api-SQKXROZS.js");
+  const { deleteComment } = await import("./rest-api-DCR76CZK.js");
+  const { FigmaClient: FigmaClient2 } = await import("./rest-api-DCR76CZK.js");
   const client = new FigmaClient2({ config: context.config, logger: context.logger });
   const connectionInfo = context.relay.connection.getConnectionInfo();
   const fileKey = connectionInfo.fileKey;
@@ -2971,7 +3026,17 @@ async function handleGetStatus(_params, context) {
   const healthMetrics = context.relay.heartbeat.getMetrics();
   const state = connectionInfo["state"];
   const transport = connectionInfo["transport"];
+  const memoryStore = context.relay.memoryStore;
+  const pendingChat = context.relay.pendingChatCount;
+  const ch = context.relay.boundPort;
+  const pluginConnected = state !== "WAITING";
   return {
+    channel: ch,
+    _displayToUser: pluginConnected ? null : `
+## Rex \xB7 Channel ${ch}
+
+Enter **${ch}** in the Rex plugin to connect.
+`,
     state,
     transport: {
       http: true,
@@ -2989,6 +3054,20 @@ async function handleGetStatus(_params, context) {
       completed: healthMetrics.commands.success,
       failed: healthMetrics.commands.failed
     },
+    memory: {
+      enabled: !!memoryStore,
+      connected: memoryStore?.isConnected ?? false,
+      url: memoryStore?.url ?? null
+    },
+    chat: {
+      pendingMessages: pendingChat,
+      hasMessages: pendingChat > 0
+    },
+    session: {
+      id: context.relay.activeChatSessionId,
+      name: context.relay.activeChatSessionName,
+      _hint: context.relay.activeChatSessionId ? "Active chat session. History is loaded as context." : "No active chat session."
+    },
     uptime: Math.floor(healthMetrics.connection.uptime / 1e3)
   };
 }
@@ -2996,25 +3075,37 @@ async function handleWaitForChat(params, context) {
   const timeout = params["timeout"] ?? 3e4;
   const msg = await context.relay.waitForChatMessage(timeout);
   if (!msg) {
+    const pending2 = context.relay.pendingChatCount;
     return {
       status: "timeout",
+      pendingMessages: pending2,
       message: "No chat message received within timeout period. Call wait_for_chat again to keep listening.",
-      _hint: "IMPORTANT: Call wait_for_chat again immediately to continue listening for messages."
+      _hint: pending2 > 0 ? `There are ${pending2} queued message(s). Call wait_for_chat again immediately to retrieve them.` : "IMPORTANT: Call wait_for_chat again immediately to continue listening for messages."
     };
   }
-  return {
+  const pending = context.relay.pendingChatCount;
+  const result = {
     status: "received",
     id: msg.id,
     message: msg.message,
     selection: msg.selection,
     timestamp: msg.timestamp,
-    _hint: "After processing this message and sending a response with send_chat_response, call wait_for_chat again to listen for the next message."
+    pendingMessages: pending,
+    _hint: pending > 0 ? `${pending} more message(s) queued. Call wait_for_chat again immediately to retrieve the next one.` : "After processing this message and sending a response with send_chat_response, call wait_for_chat again to listen for the next message."
   };
+  if (context.relay.activeChatSessionName === "New Session") {
+    result._sessionHint = "This is a new unnamed session. When you respond with send_chat_response, include a sessionName parameter (2-5 words, no quotes) that describes the topic of this conversation.";
+  }
+  return result;
 }
 async function handleSendChatResponse(params, context) {
   const messageId = params["messageId"];
   const message = params["message"];
   const isError = params["isError"] ?? false;
+  const sessionName = params["sessionName"];
+  if (sessionName) {
+    context.relay.updateChatSessionName(sessionName);
+  }
   context.relay.sendChatResponse({
     id: messageId,
     message,
@@ -3046,6 +3137,14 @@ async function handleSendChatChunk(params, context) {
   }
   return { status: "chunk_sent", messageId };
 }
+async function getMemoryStore(context) {
+  const store = context.relay.memoryStore;
+  if (!store) return null;
+  if (!store.isConnected) {
+    await store.ensureConnected();
+  }
+  return store.isConnected ? store : null;
+}
 function getMemoryContext(context) {
   const connectionInfo = context.relay.connection.getConnectionInfo();
   const userInfo = connectionInfo["user"];
@@ -3059,15 +3158,55 @@ function getMemoryContext(context) {
     pageName: connectionInfo["pageName"]
   };
 }
-async function handleRemember(params, context) {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
+function addEmptyDebug(response, store, memCtx, hint) {
+  response._debug = {
+    serviceUrl: store.url,
+    contextUsed: memCtx,
+    hint
+  };
+}
+var CATEGORY_LABELS = {
+  convention: "Convention",
+  decision: "Decision",
+  context: "Context",
+  rejection: "Rejected",
+  relationship: "Relationship",
+  preference: "Preference",
+  correction: "Correction"
+};
+function formatSurfacedCard(note) {
+  const label = CATEGORY_LABELS[note.category] ?? note.category;
+  const confTag = (note.confidence ?? 1) < 0.5 ? " (low confidence)" : "";
+  const by = note.createdBy || "Rex";
+  return `:::surfaced{category="${label}${confTag}" by="${by}"}
+${note.content}
+:::`;
+}
+function formatSavedCard(label, summary) {
+  return `:::saved{category="${label}" by="Rex"}
+${summary}
+:::`;
+}
+var SURFACED_FORMAT_HINT = "When sending these notes to chat via send_chat_response/send_chat_chunk, use the _chatMarkdown field. Condense each card body to 1-3 sentences \u2014 keep exact values (hex, px, component names) but drop verbose explanations, **Why:**/**How to apply:** sections, timestamps, and tags. Preserve **bold** sparingly for the single most important value. Max 5 cards per response in relevance order. Add a brief intro line before cards and a closing line after. Add :::action lines ONLY when a note conflicts with the user's current request (max 3 short labels). If more notes exist than shown, mention how many remain.";
+var SAVED_FORMAT_HINT = "When sending to chat via send_chat_response/send_chat_chunk, use the _chatMarkdown field. Condense the body to a short summary of what was saved. Never add actions to saved cards.";
+async function handleNote(params, context) {
+  const store = await getMemoryStore(context);
+  if (!store) {
     return {
+      _source: "rex-cloud",
       status: "disabled",
-      message: "Memory system is not enabled. Set REX_MEMORY_ENABLED=true and configure MongoDB."
+      message: "Note system is not available. Check that the memory service is reachable."
     };
   }
   const memCtx = getMemoryContext(context);
+  const scope = params["scope"] ?? "file";
+  if ((scope === "file" || scope === "page") && !memCtx.fileKey) {
+    return {
+      _source: "rex-cloud",
+      status: "error",
+      message: `Cannot store a ${scope}-scoped note without a connected Figma file. Connect the plugin first, or use scope: "team".`
+    };
+  }
   const tags = params["tags"] ?? [];
   if (memCtx.pageName && !tags.includes(`page:${memCtx.pageName}`)) {
     tags.push(`page:${memCtx.pageName}`);
@@ -3077,25 +3216,30 @@ async function handleRemember(params, context) {
     memCtx.componentKey = componentKey;
   }
   const entry = await store.remember({
-    scope: params["scope"] ?? "file",
+    scope,
     category: params["category"] ?? "convention",
     content: params["content"],
     tags,
     source: "explicit",
     context: memCtx
   });
+  const savedLabel = "Saved to notes";
+  const savedContent = params["content"];
   return {
+    _source: "rex-cloud",
     status: "stored",
     id: entry._id,
     scope: entry.scope,
     category: entry.category,
-    confidence: entry.confidence
+    confidence: entry.confidence,
+    _chatMarkdown: formatSavedCard(savedLabel, savedContent),
+    _formatHint: SAVED_FORMAT_HINT
   };
 }
-async function handleRecall(params, context) {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
-    return { status: "disabled", memories: [] };
+async function handleNotes(params, context) {
+  const store = await getMemoryStore(context);
+  if (!store) {
+    return { _source: "rex-cloud", status: "disabled", notes: [] };
   }
   const memCtx = getMemoryContext(context);
   const results = await store.recall({
@@ -3106,25 +3250,39 @@ async function handleRecall(params, context) {
     limit: params["limit"],
     context: memCtx
   });
-  return {
-    memories: results.map((m) => ({
-      id: m._id,
-      scope: m.scope,
-      category: m.category,
-      content: m.content,
-      tags: m.tags,
-      confidence: m.confidence,
-      createdBy: m.createdBy.name,
-      createdAt: m.createdAt,
-      accessCount: m.accessCount
-    })),
+  const notesData = results.map((m) => ({
+    id: m._id,
+    scope: m.scope,
+    category: m.category,
+    content: m.content,
+    tags: m.tags,
+    confidence: m.confidence,
+    createdBy: m.createdBy?.name,
+    createdAt: m.createdAt,
+    accessCount: m.accessCount
+  }));
+  const response = {
+    _source: "rex-cloud",
+    notes: notesData,
     count: results.length
   };
+  if (results.length === 0) {
+    addEmptyDebug(response, store, memCtx, "Query returned 0 results. Check that the service has notes matching this context (fileKey, userId).");
+  } else {
+    response._chatMarkdown = notesData.map((n) => formatSurfacedCard({
+      category: n.category,
+      content: n.content,
+      createdBy: n.createdBy,
+      confidence: n.confidence
+    })).join("\n\n");
+    response._formatHint = SURFACED_FORMAT_HINT;
+  }
+  return response;
 }
-async function handleForget(params, context) {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
-    return { status: "disabled" };
+async function handleRemoveNote(params, context) {
+  const store = await getMemoryStore(context);
+  if (!store) {
+    return { _source: "rex-cloud", status: "disabled" };
   }
   const memCtx = getMemoryContext(context);
   const deleted = await store.forget(
@@ -3133,12 +3291,12 @@ async function handleForget(params, context) {
     params["query"],
     params["scope"]
   );
-  return { status: "deleted", count: deleted };
+  return { _source: "rex-cloud", status: "deleted", count: deleted };
 }
-async function handleMemories(params, context) {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
-    return { status: "disabled", memories: [] };
+async function handleBrowseNotes(params, context) {
+  const store = await getMemoryStore(context);
+  if (!store) {
+    return { _source: "rex-cloud", status: "disabled", notes: [] };
   }
   const memCtx = getMemoryContext(context);
   const results = await store.list(
@@ -3148,26 +3306,40 @@ async function handleMemories(params, context) {
     params["limit"],
     params["includeSuperseded"]
   );
-  return {
-    memories: results.map((m) => ({
-      id: m._id,
-      scope: m.scope,
-      category: m.category,
-      content: m.content,
-      tags: m.tags,
-      confidence: m.confidence,
-      createdBy: m.createdBy.name,
-      createdAt: m.createdAt,
-      accessCount: m.accessCount,
-      supersededBy: m.supersededBy
-    })),
+  const notesData = results.map((m) => ({
+    id: m._id,
+    scope: m.scope,
+    category: m.category,
+    content: m.content,
+    tags: m.tags,
+    confidence: m.confidence,
+    createdBy: m.createdBy?.name,
+    createdAt: m.createdAt,
+    accessCount: m.accessCount,
+    supersededBy: m.supersededBy
+  }));
+  const response = {
+    _source: "rex-cloud",
+    notes: notesData,
     count: results.length
   };
+  if (results.length === 0) {
+    addEmptyDebug(response, store, memCtx, "No notes found. Check that the service has notes matching this context (fileKey, userId). Use scope: 'team' to query cross-file notes.");
+  } else {
+    response._chatMarkdown = notesData.map((n) => formatSurfacedCard({
+      category: n.category,
+      content: n.content,
+      createdBy: n.createdBy,
+      confidence: n.confidence
+    })).join("\n\n");
+    response._formatHint = SURFACED_FORMAT_HINT;
+  }
+  return response;
 }
-async function handleMemoryCleanup(params, context) {
-  const store = context.relay.memoryStore;
-  if (!store?.isConnected) {
-    return { status: "disabled" };
+async function handleCleanupNotes(params, context) {
+  const store = await getMemoryStore(context);
+  if (!store) {
+    return { _source: "rex-cloud", status: "disabled" };
   }
   const result = await store.cleanup({
     dryRun: params["dryRun"],
@@ -3176,6 +3348,7 @@ async function handleMemoryCleanup(params, context) {
     removeSuperseded: params["removeSuperseded"]
   });
   return {
+    _source: "rex-cloud",
     status: result.dryRun ? "preview" : "cleaned",
     ...result
   };
@@ -3185,11 +3358,11 @@ var LOCAL_HANDLERS = {
   wait_for_chat: handleWaitForChat,
   send_chat_response: handleSendChatResponse,
   send_chat_chunk: handleSendChatChunk,
-  remember: handleRemember,
-  recall: handleRecall,
-  forget: handleForget,
-  memories: handleMemories,
-  memory_cleanup: handleMemoryCleanup
+  note: handleNote,
+  notes: handleNotes,
+  remove_note: handleRemoveNote,
+  browse_notes: handleBrowseNotes,
+  cleanup_notes: handleCleanupNotes
 };
 async function routeToolCall(toolName, args, relay, config, logger) {
   const route = TOOL_ROUTES[toolName];
@@ -3446,18 +3619,18 @@ var TOOL_DESCRIPTIONS = {
   delete_comment: "Delete a comment by ID.",
   // ── Utility Tools ───────────────────────────────────────────────────────
   execute: "Run arbitrary JavaScript in Figma's plugin context. Escape hatch for operations not covered by dedicated tools. 10s timeout, no network access.",
-  get_status: "Get Rex connection status, transport info, plugin state, command queue stats, and uptime.",
+  get_status: "Get Rex connection status including the channel number (port) the user needs to connect the Figma plugin. Also returns transport info, plugin state, queue stats, and uptime.",
   batch_execute: "Execute multiple independent operations in a single atomic call. More efficient than multiple individual tool calls.",
   // ── Chat Tools ──────────────────────────────────────────────────────────
-  wait_for_chat: "Long-poll for a chat message from the Figma plugin. Returns when a message arrives or after timeout. IMPORTANT: You MUST call this tool again after every response you send \u2014 it is a continuous listening loop. After timeout, call it again immediately. After receiving a message and responding with send_chat_response, call it again immediately. Never stop the loop unless the user explicitly asks you to stop listening.",
+  wait_for_chat: "Long-poll for a chat message from the Figma plugin. IMPORTANT: Before starting the listen loop, call get_status first. If the plugin is not connected, display the _displayToUser field EXACTLY as-is to the user \u2014 it contains the channel number they need. Then start the listen loop: call this tool, and after every response you send, call it again immediately. After timeout, call it again. Never stop unless the user explicitly asks.",
   send_chat_response: "Send a response message back to the Figma plugin chat interface. After calling this, you MUST call wait_for_chat again immediately to continue listening for the next message.",
   send_chat_chunk: "Send a streaming text chunk to the Figma plugin chat. Call multiple times with done:false for each chunk, then once with done:true for the final chunk. This creates a real-time typing effect in the plugin.",
-  // ── Memory Tools ──────────────────────────────────────────────────────────
-  remember: "IMPORTANT: When the user asks to remember, store, or commit design knowledge to memory, ALWAYS use this tool instead of file-based memory. This is the team's shared persistent memory for design decisions, conventions, project context, preferences, and corrections. Memories persist across sessions and are shared with all team members.",
-  recall: "Query stored memories by topic. Returns relevant memories from all scopes (user, team, file, page) ranked by confidence and recency.",
-  forget: "Delete a specific memory by ID or remove memories matching a search query.",
-  memories: "List and browse all stored memories. Filter by scope (user/team/file/page) and category (decision/convention/context/etc).",
-  memory_cleanup: "Remove stale, low-confidence, and superseded memories. Run with dryRun:true first to preview what would be removed."
+  // ── Note Tools ───────────────────────────────────────────────────────────
+  note: "Store design knowledge \u2014 triggered by 'note this', 'take note', 'remember this about the design'. Shared with the team. IMPORTANT: When the user asks to note, remember, store, or commit design knowledge, ALWAYS use this tool instead of file-based memory. Notes persist across sessions and are shared with all team members.",
+  notes: "Query design knowledge \u2014 triggered by 'what do you know about', 'check your notes', 'recall'. Returns from cloud storage. Returns relevant notes from all scopes (user, team, file, page) ranked by confidence and recency.",
+  remove_note: "Delete a specific note by ID or remove notes matching a search query.",
+  browse_notes: "List all design knowledge \u2014 triggered by 'show me what you know', 'list your notes'. Filter by scope (user/team/file/page) and category (decision/convention/context/etc).",
+  cleanup_notes: "Remove stale, low-confidence, and superseded notes. Run with dryRun:true first to preview what would be removed."
 };
 function zodSchemaToJsonSchema(schema) {
   return zodToJsonSchema(schema, { target: "jsonSchema7" });
@@ -3515,9 +3688,10 @@ var RexMcpServer = class {
    */
   async start() {
     await this.relay.start();
+    const channel = this.relay.boundPort;
     this.logger.info("Relay server started", {
       host: this.config.relay.host,
-      port: this.config.relay.port
+      channel
     });
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
@@ -3799,6 +3973,21 @@ async function main() {
   });
   try {
     await server.start();
+    const channel = server.getRelay().boundPort;
+    process.stderr.write(`
+`);
+    process.stderr.write(`  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557
+`);
+    process.stderr.write(`  \u2551                               \u2551
+`);
+    process.stderr.write(`  \u2551   REX \xB7 channel ${String(channel).padEnd(13)}\u2551
+`);
+    process.stderr.write(`  \u2551                               \u2551
+`);
+    process.stderr.write(`  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D
+`);
+    process.stderr.write(`
+`);
   } catch (err) {
     logger.error("Failed to start Rex", {
       error: err instanceof Error ? err.message : String(err)

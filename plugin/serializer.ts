@@ -197,7 +197,7 @@ function serializePaint(paint: Paint): SerializedPaint | null {
   }
 }
 
-function serializePaints(paints: readonly Paint[]): SerializedPaint[] {
+export function serializePaints(paints: readonly Paint[]): SerializedPaint[] {
   const result: SerializedPaint[] = [];
   for (const paint of paints) {
     const serialized = serializePaint(paint);
@@ -257,13 +257,13 @@ function serializeEffect(effect: Effect): SerializedEffect {
   }
 }
 
-function serializeEffects(effects: readonly Effect[]): SerializedEffect[] {
+export function serializeEffects(effects: readonly Effect[]): SerializedEffect[] {
   return effects.map(serializeEffect);
 }
 
 // ─── Text Style Serialization ───────────────────────────────────────────────
 
-function serializeTextStyle(node: TextNode): SerializedTextStyle | undefined {
+export function serializeTextStyle(node: TextNode): SerializedTextStyle | undefined {
   const style: SerializedTextStyle = {};
 
   const fontName = node.fontName;
@@ -325,7 +325,7 @@ function serializeTextStyle(node: TextNode): SerializedTextStyle | undefined {
   return style;
 }
 
-function getWeightFromStyle(style: string): number {
+export function getWeightFromStyle(style: string): number {
   const lower = style.toLowerCase();
   if (lower.includes("thin")) return 100;
   if (lower.includes("extra light") || lower.includes("extralight")) return 200;

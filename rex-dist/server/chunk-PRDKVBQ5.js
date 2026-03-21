@@ -11,7 +11,9 @@ import { z } from "zod";
 var PaddingArraySchema = z.array(z.number().int().positive()).min(1).max(6);
 var RelayConfigSchema = z.object({
   port: z.number().int().min(1024).max(65535).default(7780),
-  host: z.string().default("127.0.0.1")
+  host: z.string().default("127.0.0.1"),
+  portRangeStart: z.number().int().min(1024).max(65535).default(7780),
+  portRangeEnd: z.number().int().min(1024).max(65535).default(7789)
 });
 var PollingConfigSchema = z.object({
   defaultInterval: z.number().int().positive().default(300),
@@ -409,4 +411,4 @@ export {
   postComment,
   deleteComment
 };
-//# sourceMappingURL=chunk-WMOEZE4I.js.map
+//# sourceMappingURL=chunk-PRDKVBQ5.js.map

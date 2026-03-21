@@ -55,6 +55,10 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     "Get variables and collections from the current file. Supports filtering by collection, name pattern, and type.",
   get_components:
     "Get published components and component sets. Supports search and variant details.",
+  extract_som:
+    "Extract a Screen Object Model (SOM v2) from a live Figma frame. Returns a semantic tree with role assignment, content/style separation, and confidence scores. Use for design analysis, comparison, and programmatic understanding of screen structure.",
+  track_frame:
+    "Start observing a frame for designer refinements. Extracts the SOM, builds a manifest of all nodes and their roles, then watches for property changes (spacing, colors, typography, layout). Changes are batched and sent to Osiris for pattern learning. Only one frame can be tracked at a time.",
 
   // ── Write Tools: Nodes ──────────────────────────────────────────────────
   create_node:

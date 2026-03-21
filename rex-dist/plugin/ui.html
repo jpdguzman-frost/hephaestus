@@ -24,7 +24,8 @@
   #illustration-area {
     position: relative;
     width: 360px;
-    height: 155px;
+    flex: 1 0 0;
+    min-height: 0;
     background: #F1C674;
     display: flex;
     align-items: center;
@@ -53,8 +54,8 @@
 
   #status-badge {
     position: absolute;
-    top: 11px;
-    right: 10px;
+    top: 12px;
+    right: 12px;
     font-weight: 700;
     font-size: 8px;
     text-transform: uppercase;
@@ -64,6 +65,9 @@
     background: #EF4444;
     color: #FFFFFF;
     line-height: 1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
   }
 
   #queue-badge {
@@ -102,7 +106,7 @@
     flex-direction: column;
     justify-content: center;
     overflow: hidden;
-    padding: 12px 14px 16px 14px;
+    padding: 21px 14px;
     box-shadow: 0px -2px 8px rgba(0,0,0,0.04);
   }
 
@@ -152,7 +156,7 @@
 
   #status-talk-now {
     font-weight: 700;
-    font-size: 12px;
+    font-size: 16px;
     color: #F4C97A;
     cursor: pointer;
     line-height: 1;
@@ -196,13 +200,36 @@
   #chat-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 24px;
     padding: 14px 16px;
     background: #3B3634;
     border-bottom: 1px solid rgba(0,0,0,0.09);
     flex-shrink: 0;
     overflow: hidden;
     white-space: nowrap;
+  }
+
+  #chat-session-bar {
+    display: none;
+    padding: 8px 16px 12px 16px;
+    background: rgba(59, 54, 52, 0.8);
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+  }
+
+  #chat-session-bar.visible {
+    display: block;
+  }
+
+  #chat-session-name {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: #DBD6D2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   #chat-header-title {
@@ -216,10 +243,27 @@
     width: 61px;
   }
 
+  /* Queue badge in header — per Figma design */
+  #chat-queue-badge {
+    display: none;
+    padding: 6px 8px;
+    background: #F06800;
+    border-radius: 24px;
+    font-size: 8px;
+    font-weight: 700;
+    color: #DBD6D2;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  #chat-queue-badge.visible {
+    display: inline-flex;
+  }
+
   #chat-header-pill {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-left: auto;
     background: #1E1917;
     padding: 10px 14px;
     border-radius: 100px;
@@ -240,6 +284,20 @@
     line-height: 1;
   }
   #pill-status-btn:hover {
+    color: rgba(255,255,255,0.8);
+  }
+
+  #pill-sessions-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-weight: 700;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  #pill-sessions-btn:hover {
     color: rgba(255,255,255,0.8);
   }
 
@@ -364,6 +422,16 @@
     color: #8C827A;
     line-height: 1.6;
     max-width: 252px;
+  }
+
+  /* Chat history divider */
+  .chat-history-divider {
+    text-align: center;
+    font-size: 10px;
+    color: #9B8D80;
+    padding: 8px 0;
+    margin-bottom: 8px;
+    opacity: 0.6;
   }
 
   /* Node reference tag (inside bubble, own line) */
@@ -725,10 +793,707 @@
   .msg-content table.md-table th:last-child {
     padding-right: 12px;
   }
+
+  /* ─── Note Cards ─── */
+  .note-card {
+    background: #2E2A28;
+    border-left: 2px solid #F06800;
+    border-radius: 0 6px 6px 0;
+    padding: 16px 22px;
+    margin: 4px 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+  .note-card.saved {
+    border-left-color: #2EBF78;
+  }
+  .note-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .note-card-category {
+    color: #F06800;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .saved .note-card-category {
+    color: #2EBF78;
+  }
+  .note-card-sep {
+    color: #F06800;
+    opacity: 0.5;
+    font-size: 10px;
+  }
+  .saved .note-card-sep {
+    color: #2EBF78;
+  }
+  .note-card-author {
+    color: rgba(255,255,255,0.5);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .note-card-body {
+    color: #DBD6D2;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 150%;
+  }
+  .note-card-actions {
+    margin-top: 22px;
+  }
+  .note-card-actions-prompt {
+    color: rgba(255,255,255,0.5);
+    font-size: 10px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .note-card-actions-row {
+    display: flex;
+    gap: 12px;
+  }
+  .note-card-action {
+    color: #EEEDEC;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .note-card-action:hover {
+    opacity: 0.8;
+  }
+
+  /* ─── Session Picker ─── */
+  #session-picker {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    background: #3B3634;
+  }
+
+  #session-picker-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    background: #3B3634;
+    border-bottom: 1px solid rgba(0,0,0,0.09);
+    flex-shrink: 0;
+    justify-content: space-between;
+  }
+
+  #session-picker-header .sp-logo {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: #F06800;
+  }
+
+  .sp-pills {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #1E1917;
+    padding: 10px 14px;
+    border-radius: 100px;
+  }
+
+  .sp-pill {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: rgba(255,255,255,0.6);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .sp-pill.active {
+    color: #F27B21;
+  }
+
+  #session-picker-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 32px;
+    overflow: hidden;
+  }
+
+  #sp-idle-text {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 500;
+    font-size: 16px;
+    color: #8C827A;
+    text-align: center;
+    line-height: 1.6;
+    flex-shrink: 0;
+    margin-bottom: 16px;
+  }
+
+  #sp-sessions-block {
+    width: 100%;
+  }
+
+  #new-session-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 48px;
+    padding: 14px 16px;
+    background: #F06800;
+    border: none;
+    border-radius: 12px;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    color: #FFFFFF;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  #new-session-btn:hover {
+    background: #D85E00;
+  }
+
+  #session-list-label {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: #8C827A;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  #session-list {
+    margin-top: 0;
+  }
+
+  #sp-view-all {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    color: #F06800;
+    line-height: 1.4;
+    text-align: center;
+    margin-top: 16px;
+    cursor: pointer;
+  }
+
+  .session-row {
+    padding: 16px 0;
+    cursor: pointer;
+  }
+
+  .session-row:hover {
+    opacity: 0.85;
+  }
+
+  .session-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .session-row-name {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: #DBD6D2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+  }
+
+  .session-row-time {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 400;
+    font-size: 10px;
+    color: #BFB6AE;
+    flex-shrink: 0;
+  }
+
+  .session-row-delete {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.2);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 0 0 8px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .session-row-delete:hover {
+    color: #EF4444;
+  }
+
+  .session-row-summary {
+    margin-top: 4px;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 400;
+    font-size: 12px;
+    color: #8C827A;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .session-divider {
+    height: 1px;
+    background: #2E2A28;
+  }
+
+  #session-empty {
+    text-align: center;
+    padding: 40px 0;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-size: 12px;
+    color: #8C827A;
+    opacity: 0.6;
+  }
+
+  /* ─── Session History ─── */
+  #session-history {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    background: #3B3634;
+  }
+
+  #sh-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    background: #3B3634;
+    border-bottom: 1px solid rgba(0,0,0,0.09);
+    flex-shrink: 0;
+    justify-content: space-between;
+  }
+
+  #sh-header .sp-logo {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: #F06800;
+  }
+
+  #sh-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  .sh-date-label {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 10px;
+    color: #8C827A;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .sh-date-group {
+    margin-bottom: 16px;
+  }
+
+  /* ─── Channel Input Screen ─── */
+  #channel-screen {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #302A24;
+    padding: 32px;
+    overflow: hidden;
+    min-height: 100vh;
+  }
+
+  #channel-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  #channel-header-text {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: #F06800;
+    white-space: nowrap;
+    line-height: normal;
+  }
+
+  /* Digit area: positioned container for boxes + overlay input */
+  #digit-area {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .digit-box {
+    flex: 1 0 0;
+    min-width: 0;
+    min-height: 1px;
+    height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 8px;
+    background: #2E2A28;
+  }
+
+  .digit-box.no-bg {
+    background: transparent;
+    border-radius: 0;
+  }
+
+  .digit-box.connecting-bg {
+    background: rgba(46, 42, 40, 0.7);
+  }
+
+  .digit-box .digit-char {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 80px;
+    line-height: 1;
+    color: #F4F3F2;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .digit-box .digit-char.dimmed {
+    opacity: 0.5;
+  }
+
+  .digit-box .digit-char.error {
+    color: #F04545;
+  }
+
+  .digit-box .digit-placeholder {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 600;
+    font-size: 36px;
+    line-height: normal;
+    color: #7A7672;
+    opacity: 0.3;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .digit-box .digit-cursor {
+    width: 2px;
+    height: 58px;
+    background: #F1C674;
+    border-radius: 1px;
+    animation: cursor-blink 1s ease-in-out infinite;
+  }
+
+  @keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Transparent input overlaid on digit area for real keyboard input */
+  #channel-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: transparent;
+    caret-color: transparent;
+    font-size: 80px;
+    text-align: center;
+    letter-spacing: 0.1em;
+    -moz-appearance: textfield;
+    z-index: 2;
+  }
+
+  #channel-input::-webkit-outer-spin-button,
+  #channel-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* ─── Bottom Section ─── */
+  #channel-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  #channel-error-text {
+    display: none;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 500;
+    font-size: 11px;
+    color: #C1B9B3;
+    text-align: center;
+    line-height: 1.5;
+  }
+
+  #channel-connect-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    width: 100%;
+    height: 48px;
+    border: none;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  #channel-connect-btn.disabled {
+    background: #4A4440;
+    color: #7A7672;
+    cursor: default;
+  }
+
+  #channel-connect-btn.ready {
+    background: #F06800;
+    color: #FFFFFF;
+  }
+
+  #channel-connect-btn.ready:hover {
+    background: #D85E00;
+  }
+
+  #channel-connect-btn.connecting {
+    background: #F1C674;
+    color: #302A24;
+    cursor: default;
+  }
+
+  #channel-connect-btn.error {
+    background: #F06800;
+    color: #FFFFFF;
+  }
+
+  #channel-connect-btn.error:hover {
+    background: #D85E00;
+  }
+
+  /* ─── Disconnected Overlay ─── */
+  #channel-disconnected {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(48, 42, 36, 0.97);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 64px 32px 32px 32px;
+    overflow: hidden;
+    z-index: 500;
+  }
+
+  #disconnected-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    width: 320px;
+  }
+
+  #disconnected-logo-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 64px;
+  }
+
+  #disconnected-logo-block svg {
+    width: 61px;
+    height: 24px;
+  }
+
+  #disconnected-icon {
+    width: 120px;
+    height: 120px;
+    background: #2E2A28;
+    border-radius: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #disconnected-icon span {
+    font-size: 52.5px;
+    line-height: normal;
+    text-align: center;
+  }
+
+  #disconnected-message {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 500;
+    font-size: 16px;
+    color: #DBD6D2;
+    text-align: center;
+    line-height: 1.5;
+    width: 280px;
+  }
+
+  #disconnected-message strong {
+    font-weight: 700;
+  }
+
+  #disconnected-subtitle {
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-weight: 400;
+    font-size: 12px;
+    color: #8C827A;
+    text-align: center;
+    line-height: 1.5;
+    width: 280px;
+  }
+
+  #disconnected-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+
+  #reconnect-btn {
+    flex: 1 0 0;
+    min-width: 0;
+    height: 48px;
+    background: #F1C674;
+    color: #302A24;
+    border: none;
+    border-radius: 8px;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.14px;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #reconnect-btn:hover {
+    background: #E5B85E;
+  }
+
+  #change-channel-btn {
+    flex: 1 0 0;
+    min-width: 0;
+    height: 48px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: #B6AFAB;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.14px;
+    text-align: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #change-channel-btn:hover {
+    color: #DBD6D2;
+  }
 </style>
 
 <div id="container" style="position: relative;">
-  <div id="status-container">
+
+  <!-- ─── Channel Input Screen ─── -->
+  <div id="channel-screen">
+    <div id="channel-header">
+      <span id="channel-header-text">REX</span>
+    </div>
+    <div id="digit-area">
+      <div class="digit-box" id="db0"><span class="digit-placeholder">&ndash;</span></div>
+      <div class="digit-box" id="db1"><span class="digit-placeholder">&ndash;</span></div>
+      <div class="digit-box" id="db2"><span class="digit-placeholder">&ndash;</span></div>
+      <div class="digit-box" id="db3"><span class="digit-placeholder">&ndash;</span></div>
+      <input id="channel-input" type="text" inputmode="numeric" maxlength="4" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="channel-bottom">
+      <button id="channel-connect-btn" class="disabled">Connect</button>
+      <p id="channel-error-text"></p>
+    </div>
+  </div>
+
+  <!-- ─── Disconnected Overlay ─── -->
+  <div id="channel-disconnected">
+    <div id="disconnected-content">
+      <div id="disconnected-logo-block">
+        <svg width="61" height="24" viewBox="0 0 61 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 24V0H9.34246C11.0252 0 12.5112 0.289933 13.8006 0.869799C15.1118 1.44966 16.139 2.30873 16.882 3.44698C17.625 4.58524 17.9965 5.99195 17.9965 7.66711C17.9965 9.29933 17.6141 10.6953 16.8492 11.855C16.0843 12.9933 15.0572 13.8524 13.7678 14.4322L19.3405 24H13.6367L7.60509 13.4013L10.8831 15.302H5.08099V24H0ZM5.08099 10.953H9.37524C10.0964 10.953 10.7192 10.8134 11.2437 10.5342C11.7682 10.255 12.1725 9.86846 12.4566 9.3745C12.7626 8.88054 12.9155 8.31141 12.9155 7.66711C12.9155 7.00134 12.7626 6.42148 12.4566 5.92752C12.1725 5.43356 11.7682 5.04698 11.2437 4.76779C10.7192 4.48859 10.0964 4.34899 9.37524 4.34899H5.08099V10.953Z" fill="#F4F3F2"/><path d="M21.8644 24V0H38.2874V4.34899H26.9454V9.79329H37.6318V14.1423H26.9454V19.651H38.2874V24H21.8644Z" fill="#F4F3F2"/><path d="M39.3648 24L47.3633 11.9839L39.3648 0H45.1998L51.6248 9.6H48.7729L55.1651 0H61V0L53.0343 11.9839L61 24H55.1651L48.7729 14.3678L51.6248 14.4L45.1998 24H39.3648Z" fill="#F4F3F2"/></svg>
+        <div id="disconnected-icon"><span>⚡</span></div>
+      </div>
+      <div id="disconnected-message">We've lost our connection<br>to channel <strong id="disconnected-channel-num">7780</strong>.</div>
+      <div id="disconnected-subtitle">Don't worry — Rex remembers where you left off.</div>
+    </div>
+    <div id="disconnected-buttons">
+      <button id="reconnect-btn">Reconnect</button>
+      <button id="change-channel-btn">Change channel</button>
+    </div>
+  </div>
+
+  <div id="session-history" style="display:none;">
+    <div id="sh-header">
+      <span class="sp-logo">REX</span>
+      <div class="sp-pills">
+        <span class="sp-pill" id="sh-pill-status">Status</span>
+        <span class="sp-pill" id="sh-pill-talk">Talk</span>
+        <span class="sp-pill active" id="sh-pill-sessions">Sessions</span>
+      </div>
+    </div>
+    <div id="sh-content"></div>
+  </div>
+
+  <div id="session-picker" style="display:none;">
+    <div id="session-picker-header">
+      <span class="sp-logo">REX</span>
+      <div class="sp-pills">
+        <span class="sp-pill" id="sp-pill-status">Status</span>
+        <span class="sp-pill active" id="sp-pill-talk">Talk</span>
+        <span class="sp-pill" id="sp-pill-history">Sessions</span>
+      </div>
+    </div>
+    <div id="session-picker-content">
+      <div id="sp-idle-text"></div>
+      <div id="sp-sessions-block">
+        <div id="session-list-label">RECENT SESSIONS</div>
+        <div id="session-list"></div>
+        <div id="sp-view-all">View previous conversations</div>
+      </div>
+      <button id="new-session-btn">Start a New Session</button>
+    </div>
+  </div>
+
+  <div id="status-container" style="display:none;">
     <div id="illustration-area" class="disconnected">
       <span id="rex-label"><svg width="61" height="24" viewBox="0 0 61 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 24V0H9.34246C11.0252 0 12.5112 0.289933 13.8006 0.869799C15.1118 1.44966 16.139 2.30873 16.882 3.44698C17.625 4.58524 17.9965 5.99195 17.9965 7.66711C17.9965 9.29933 17.6141 10.6953 16.8492 11.855C16.0843 12.9933 15.0572 13.8524 13.7678 14.4322L19.3405 24H13.6367L7.60509 13.4013L10.8831 15.302H5.08099V24H0ZM5.08099 10.953H9.37524C10.0964 10.953 10.7192 10.8134 11.2437 10.5342C11.7682 10.255 12.1725 9.86846 12.4566 9.3745C12.7626 8.88054 12.9155 8.31141 12.9155 7.66711C12.9155 7.00134 12.7626 6.42148 12.4566 5.92752C12.1725 5.43356 11.7682 5.04698 11.2437 4.76779C10.7192 4.48859 10.0964 4.34899 9.37524 4.34899H5.08099V10.953Z" fill="#F4F3F2"/><path d="M21.8644 24V0H38.2874V4.34899H26.9454V9.79329H37.6318V14.1423H26.9454V19.651H38.2874V24H21.8644Z" fill="#F4F3F2"/><path d="M39.3648 24L47.3633 11.9839L39.3648 0H45.1998L51.6248 9.6H48.7729L55.1651 0H61V0L53.0343 11.9839L61 24H55.1651L48.7729 14.3678L51.6248 14.4L45.1998 24H39.3648Z" fill="#F4F3F2"/></svg></span>
       <span id="status-badge">OFF</span>
@@ -749,7 +1514,7 @@
   <div id="crash-overlay">
     <div class="crash-title">Something went wrong</div>
     <div class="crash-body">Rex encountered an unexpected error. Try reloading the plugin.</div>
-    <button class="crash-reload" onclick="parent.postMessage({ pluginMessage: { type: 'resize', width: 360, height: 215 } }, '*'); location.reload();">Reload Plugin</button>
+    <button class="crash-reload" onclick="parent.postMessage({ pluginMessage: { type: 'resize', width: 360, height: 286 } }, '*'); location.reload();">Reload Plugin</button>
   </div>
 
   <div id="chat-container">
@@ -759,10 +1524,15 @@
     </div>
     <div id="chat-header">
       <span id="chat-header-title"><svg width="61" height="24" viewBox="0 0 61 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 24V0H9.34246C11.0252 0 12.5112 0.289933 13.8006 0.869799C15.1118 1.44966 16.139 2.30873 16.882 3.44698C17.625 4.58524 17.9965 5.99195 17.9965 7.66711C17.9965 9.29933 17.6141 10.6953 16.8492 11.855C16.0843 12.9933 15.0572 13.8524 13.7678 14.4322L19.3405 24H13.6367L7.60509 13.4013L10.8831 15.302H5.08099V24H0ZM5.08099 10.953H9.37524C10.0964 10.953 10.7192 10.8134 11.2437 10.5342C11.7682 10.255 12.1725 9.86846 12.4566 9.3745C12.7626 8.88054 12.9155 8.31141 12.9155 7.66711C12.9155 7.00134 12.7626 6.42148 12.4566 5.92752C12.1725 5.43356 11.7682 5.04698 11.2437 4.76779C10.7192 4.48859 10.0964 4.34899 9.37524 4.34899H5.08099V10.953Z" fill="#F06800"/><path d="M21.8644 24V0H38.2874V4.34899H26.9454V9.79329H37.6318V14.1423H26.9454V19.651H38.2874V24H21.8644Z" fill="#F06800"/><path d="M39.3648 24L47.3633 11.9839L39.3648 0H45.1998L51.6248 9.6H48.7729L55.1651 0H61V0L53.0343 11.9839L61 24H55.1651L48.7729 14.3678L51.6248 14.4L45.1998 24H39.3648Z" fill="#F06800"/></svg></span>
+      <span id="chat-queue-badge"></span>
       <div id="chat-header-pill">
         <button id="pill-status-btn">Status</button>
         <span id="pill-talk-label">Talk</span>
+        <button id="pill-sessions-btn">Sessions</button>
       </div>
+    </div>
+    <div id="chat-session-bar">
+      <div id="chat-session-name"></div>
     </div>
     <div id="chat-empty-state">
       <p id="chat-empty-text"></p>
@@ -1110,16 +1880,16 @@
     if (currentTransport === "websocket") {
       landingImg.classList.remove("idle");
       landingImg.classList.add("connected");
-      statusBadge.textContent = "WS";
+      statusBadge.innerHTML = "<span>WS</span><span>" + (currentPort || "7780") + "</span>";
       statusBadge.style.background = colors.connected;
     } else if (currentTransport === "http") {
       landingImg.classList.remove("idle", "connected");
-      statusBadge.textContent = "HTTP";
+      statusBadge.innerHTML = "<span>HTTP</span><span>" + (currentPort || "7780") + "</span>";
       statusBadge.style.background = colors.forging;
     } else {
       landingImg.classList.add("idle");
       landingImg.classList.remove("connected");
-      statusBadge.textContent = "OFF";
+      statusBadge.innerHTML = "<span>OFF</span>";
       statusBadge.style.background = colors.disconnected;
     }
     updateStatusInputBar();
@@ -1139,7 +1909,7 @@
       statusIdleInterval = setInterval(cycleStatusPhrase, 3000);
       // Resize to compact status mode if not in chat
       if (!isChatMode) {
-        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 195 } }, "*");
+        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
       }
     } else {
       // Disconnected — show prompt, hide phrase row, apply grayscale
@@ -1153,7 +1923,7 @@
       }
       // Resize to taller status mode if not in chat
       if (!isChatMode) {
-        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 215 } }, "*");
+        parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
       }
     }
   }
@@ -1202,6 +1972,31 @@
       case "ws-disconnect":
         handleWsDisconnect();
         break;
+      case "session-loading":
+        hideSessionPicker();
+        chatMessages.innerHTML = "";
+        showHistoryLoading();
+        switchToChat();
+        break;
+      case "show-session-picker":
+        showSessionPicker();
+        break;
+      case "session-list":
+        renderSessionList(msg.sessions);
+        // Also update session history if it's visible
+        if (sessionHistoryEl.style.display === "flex") {
+          renderSessionHistory(msg.sessions);
+        }
+        break;
+      case "session-created":
+        onSessionCreated(msg.session);
+        break;
+      case "session-selected":
+        onSessionSelected(msg.messages, msg.sessionName, msg.source);
+        break;
+      case "chat-history":
+        renderChatHistory(msg.messages, msg.source);
+        break;
       case "chat-response":
         receiveChatResponse(msg);
         break;
@@ -1221,19 +2016,41 @@
       case "chat-unavailable":
         setChatAvailable(false);
         break;
+      case "pending-chat":
+        updateChatQueuePill(msg.count || 0);
+        break;
+      case "session-name-update":
+        if (msg.name && msg.name !== "New Session") {
+          updateSessionBar(msg.name);
+        }
+        break;
       case "selection-changed":
         handleSelectionChanged(msg);
+        break;
+      case "channel-screen":
+        showChannelScreen(msg.lastChannel);
+        break;
+      case "channel-error":
+        showChannelError(msg.message);
+        break;
+      case "channel-connected":
+        showConnectedUI(msg.channel);
+        break;
+      case "channel-disconnected":
+        showDisconnectedOverlay(msg.channel);
         break;
     }
   };
 
   var wasConnected = false;
+  var currentPort = null;
   var connectionLostBar = document.getElementById("connection-lost-bar");
   var disconnectDebounceTimer = null;
   var DISCONNECT_DEBOUNCE_MS = 1500;
 
   function updateStatus(msg) {
     var newTransport = msg.connected ? msg.transport : null;
+    if (msg.port) currentPort = msg.port;
     if (newTransport === currentTransport) return;
 
     if (newTransport) {
@@ -1407,8 +2224,41 @@
   chatEmptyText.textContent = pickRandom(chatWelcomePhrases);
   chatInput.placeholder = pickRandom(chatPlaceholderPhrases);
 
+  // Delegated click handler for note card actions
+  chatMessages.addEventListener("click", function(e) {
+    var target = e.target;
+    if (target.classList.contains("note-card-action")) {
+      var action = target.getAttribute("data-action");
+      if (action) {
+        chatMsgCounter++;
+        var msgId = "chat_" + chatMsgCounter + "_" + Date.now();
+        appendChatMessage("user", action);
+        showChatTyping();
+        parent.postMessage({
+          pluginMessage: {
+            type: "chat-send",
+            id: msgId,
+            message: action
+          }
+        }, "*");
+      }
+    }
+  });
+
   function setChatAvailable(available) {
     if (available) chatAvailable = true;
+  }
+
+  // Queue badge in header — per Figma design: orange pill next to REX logo
+  var chatQueueBadge = document.getElementById("chat-queue-badge");
+
+  function updateChatQueuePill(count) {
+    if (count > 0) {
+      chatQueueBadge.textContent = count + " on queue";
+      chatQueueBadge.classList.add("visible");
+    } else {
+      chatQueueBadge.classList.remove("visible");
+    }
   }
 
   function updateChatDisconnectedState() {
@@ -1440,6 +2290,9 @@
 
   function switchToChat() {
     isChatMode = true;
+    sessionPickerEl.style.display = "none";
+    sessionHistoryEl.style.display = "none";
+    statusContainer.style.display = "none";
     statusContainer.classList.add("hidden");
     chatContainer.classList.add("active");
     updateChatDisconnectedState();
@@ -1451,21 +2304,28 @@
   function switchToStatus() {
     isChatMode = false;
     chatContainer.classList.remove("active");
+    sessionPickerEl.style.display = "none";
+    sessionHistoryEl.style.display = "none";
+    statusContainer.style.display = "flex";
     statusContainer.classList.remove("hidden");
-    var statusHeight = currentTransport ? 195 : 215;
-    parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: statusHeight } }, "*");
+    parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
   }
 
   // Status mode field click → switch to chat (only when connected)
   statusField.addEventListener("click", function() {
-    if (currentTransport) switchToChat();
+    if (currentTransport) showSessionPicker();
   });
   statusTalkNow.addEventListener("click", function() {
-    if (currentTransport) switchToChat();
+    if (currentTransport) showSessionPicker();
   });
 
   // Header pill "Status" button → switch to status
   pillStatusBtn.addEventListener("click", switchToStatus);
+
+  var pillSessionsBtn = document.getElementById("pill-sessions-btn");
+  pillSessionsBtn.addEventListener("click", function() {
+    showSessionHistory();
+  });
 
   // Auto-resize textarea
   chatInput.addEventListener("input", function() {
@@ -1620,10 +2480,145 @@
       return html;
     });
 
+    // Note cards (:::surfaced{...} and :::saved{...})
+    escaped = escaped.replace(
+      /:::(surfaced|saved)\{category="([^"]*)"(?:\s+by="([^"]*)")?\}\n([\s\S]*?)(?:::action ([^\n]*)\n)?:::/g,
+      function(match, variant, category, author, body, actionLine) {
+        var html = '<div class="note-card ' + variant + '">';
+        html += '<div class="note-card-header">';
+        html += '<span class="note-card-category">' + category + '</span>';
+        if (author) {
+          html += '<span class="note-card-sep">&middot;</span>';
+          html += '<span class="note-card-author">by ' + author + '</span>';
+        }
+        html += '</div>';
+        html += '<div class="note-card-body">' + body.trim().replace(/\n/g, '<br>') + '</div>';
+        if (actionLine) {
+          var actions = actionLine.split('|').map(function(a) { return a.trim(); });
+          html += '<div class="note-card-actions">';
+          html += '<div class="note-card-actions-prompt">Do you want to</div>';
+          html += '<div class="note-card-actions-row">';
+          for (var i = 0; i < actions.length; i++) {
+            html += '<span class="note-card-action" data-action="' + actions[i] + '">' + actions[i] + '</span>';
+          }
+          html += '</div></div>';
+        }
+        html += '</div>';
+        return html;
+      }
+    );
+
+    // Collapse blank lines between consecutive note cards
+    escaped = escaped.replace(/(<\/div>)\n+(<div class="note-card)/g, '$1$2');
+
     // Line breaks
     escaped = escaped.replace(/\n/g, '<br>');
 
     return escaped;
+  }
+
+  // ─── Chat History ──────────────────────────────────────────────────────
+
+  function showHistoryLoading() {
+    var existing = document.getElementById("chat-history-loading");
+    if (existing) return;
+    var el = document.createElement("div");
+    el.id = "chat-history-loading";
+    el.className = "chat-history-divider";
+    el.textContent = "Loading chat history...";
+    chatMessages.appendChild(el);
+    // Mark as having messages so the empty state doesn't cover the loading indicator
+    hasMessages = true;
+    updateChatDisconnectedState();
+  }
+
+  function hideHistoryLoading() {
+    var el = document.getElementById("chat-history-loading");
+    if (el) el.remove();
+  }
+
+  function renderChatHistory(messages, source) {
+    hideHistoryLoading();
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) return;
+
+    // Cache source: only render if chat area is empty (avoid flickering)
+    if (source === "cache" && chatMessages.children.length > 0) return;
+
+    // Remote source: authoritative — clear and re-render
+    if (source === "remote") {
+      // Remove only history messages and divider (keep live messages after divider)
+      var existingDivider = chatMessages.querySelector(".chat-history-divider");
+      if (existingDivider) {
+        // Remove everything before and including the divider
+        while (chatMessages.firstChild && chatMessages.firstChild !== existingDivider) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+        if (existingDivider.parentNode) existingDivider.remove();
+      } else {
+        // No divider yet — first load, clear everything
+        chatMessages.innerHTML = "";
+      }
+    }
+
+    // Render history messages (insert at the beginning, before live messages)
+    var fragment = document.createDocumentFragment();
+    for (var i = 0; i < messages.length; i++) {
+      var entry = messages[i];
+      var div = document.createElement("div");
+      div.className = "chat-msg " + (entry.role || "user");
+
+      if (entry.role === "assistant") {
+        var labelEl = document.createElement("div");
+        labelEl.className = "msg-label";
+        labelEl.textContent = "Rex answered";
+        div.appendChild(labelEl);
+        var contentEl = document.createElement("div");
+        contentEl.className = "msg-content";
+        contentEl.innerHTML = renderMarkdown(entry.message || "");
+        div.appendChild(contentEl);
+      } else {
+        div.textContent = entry.message || "";
+      }
+      fragment.appendChild(div);
+    }
+
+    // Add divider
+    var divider = document.createElement("div");
+    divider.className = "chat-history-divider";
+    divider.textContent = "Previous messages";
+    fragment.appendChild(divider);
+
+    // Insert before existing live messages
+    if (chatMessages.firstChild) {
+      chatMessages.insertBefore(fragment, chatMessages.firstChild);
+    } else {
+      chatMessages.appendChild(fragment);
+    }
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  // Debounced cache writer — saves last 20 messages to clientStorage
+  var cacheDebounceTimer = null;
+  function scheduleCacheUpdate() {
+    if (cacheDebounceTimer) clearTimeout(cacheDebounceTimer);
+    cacheDebounceTimer = setTimeout(function() {
+      var msgs = chatMessages.querySelectorAll(".chat-msg");
+      var entries = [];
+      var startIdx = Math.max(0, msgs.length - 20);
+      for (var i = startIdx; i < msgs.length; i++) {
+        var el = msgs[i];
+        var role = el.classList.contains("user") ? "user" :
+                   el.classList.contains("error") ? "error" : "assistant";
+        // Use data-raw attribute to preserve original markdown
+        var text = el.getAttribute("data-raw") || el.textContent || "";
+        entries.push({ role: role, message: text, timestamp: Date.now() });
+      }
+      if (entries.length > 0) {
+        parent.postMessage({ pluginMessage: { type: "cache-chat-history", messages: entries, sessionBased: true } }, "*");
+      }
+    }, 2000);
   }
 
   function appendChatMessage(role, text, selectionInfo) {
@@ -1632,6 +2627,7 @@
 
     var div = document.createElement("div");
     div.className = "chat-msg " + role;
+    div.setAttribute("data-raw", text); // Preserve original text for cache
 
     if (role === "assistant") {
       var labelEl = document.createElement("div");
@@ -1667,9 +2663,11 @@
 
     chatMessages.appendChild(div);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    scheduleCacheUpdate();
   }
 
-  var seenResponseIds = {};
+  var seenResponseIds = {};    // dedup for complete chat-response messages
+  var completedStreamIds = {}; // dedup for chat-chunk streams (separate from responses)
   function receiveChatResponse(data) {
     if (data.id && seenResponseIds[data.id]) return;
     if (data.id) seenResponseIds[data.id] = true;
@@ -1713,7 +2711,9 @@
   var streamingMessages = {};
 
   function handleChatChunk(data) {
-    if (data.id && seenResponseIds[data.id]) return;
+    // Use completedStreamIds (not seenResponseIds) so streaming completion
+    // doesn't block a subsequent send_chat_response with the same ID.
+    if (data.id && completedStreamIds[data.id]) return;
 
     hasMessages = true;
     updateChatDisconnectedState();
@@ -1746,8 +2746,550 @@
       // Switch label from streaming to answered
       stream.label.className = "msg-label";
       stream.label.textContent = "Rex answered";
-      seenResponseIds[data.id] = true;
+      stream.div.setAttribute("data-raw", stream.text); // Preserve full markdown for cache
+      completedStreamIds[data.id] = true;
       delete streamingMessages[data.id];
+      scheduleCacheUpdate();
     }
   }
+
+  // ─── Channel Screen Logic ──────────────────────────────────────────────
+
+  var channelScreen = document.getElementById("channel-screen");
+  var channelInput = document.getElementById("channel-input");
+  var channelConnectBtn = document.getElementById("channel-connect-btn");
+  var channelErrorText = document.getElementById("channel-error-text");
+  var digitBoxes = [
+    document.getElementById("db0"),
+    document.getElementById("db1"),
+    document.getElementById("db2"),
+    document.getElementById("db3"),
+  ];
+  var statusContainer = document.getElementById("status-container");
+  var channelDisconnected = document.getElementById("channel-disconnected");
+  var disconnectedChannelNum = document.getElementById("disconnected-channel-num");
+  var reconnectBtn = document.getElementById("reconnect-btn");
+  var changeChannelBtn = document.getElementById("change-channel-btn");
+
+  var channelState = "empty"; // empty | partial | filled | connecting | error
+
+  // ── Helpers ──
+
+  function resizeForCurrentMode() {
+    if (isChatMode) {
+      parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
+    } else {
+      parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
+    }
+  }
+
+  function resetReconnectBtn() {
+    reconnectBtn.textContent = "Reconnect";
+    reconnectBtn.style.opacity = "";
+    reconnectBtn.style.cursor = "";
+  }
+
+  function deriveState(val) {
+    if (val.length === 4) return "filled";
+    if (val.length > 0) return "partial";
+    return "empty";
+  }
+
+  // ── Rendering ──
+
+  function renderDigitBoxes() {
+    var val = channelInput.value;
+    var isFilled = (val.length === 4);
+
+    for (var i = 0; i < 4; i++) {
+      var box = digitBoxes[i];
+      box.className = "digit-box";
+
+      if (channelState === "connecting") {
+        box.classList.add("connecting-bg");
+      } else if (isFilled && channelState !== "error") {
+        box.classList.add("no-bg");
+      }
+
+      if (i < val.length) {
+        var cls = "digit-char";
+        if (channelState === "connecting") cls += " dimmed";
+        else if (channelState === "error") cls += " error";
+        box.innerHTML = '<span class="' + cls + '">' + val[i] + '</span>';
+      } else if (i === val.length && channelState !== "connecting" && channelState !== "error") {
+        box.innerHTML = '<div class="digit-cursor"></div>';
+      } else {
+        box.innerHTML = '<span class="digit-placeholder">&ndash;</span>';
+      }
+    }
+  }
+
+  function updateChannelUI() {
+    var val = channelInput.value;
+    var btn = channelConnectBtn;
+
+    renderDigitBoxes();
+
+    if (channelState === "connecting") {
+      btn.className = "connecting";
+      btn.textContent = "Connecting\u2026";
+      channelErrorText.style.display = "none";
+    } else if (channelState === "error") {
+      btn.className = "error";
+      btn.textContent = "Check Claude and Retry";
+      channelErrorText.style.display = "block";
+    } else {
+      btn.className = val.length === 4 ? "ready" : "disabled";
+      btn.textContent = "Connect";
+      channelErrorText.style.display = "none";
+    }
+  }
+
+  // ── State Transitions (called from message handlers) ──
+
+  function showChannelScreen(lastChannel) {
+    channelScreen.style.display = "flex";
+    statusContainer.style.display = "none";
+    channelDisconnected.style.display = "none";
+    resetReconnectBtn();
+
+    channelInput.value = lastChannel ? String(lastChannel) : "";
+    channelState = deriveState(channelInput.value);
+    updateChannelUI();
+    setTimeout(function() { channelInput.focus(); }, 50);
+  }
+
+  function showChannelError(message) {
+    // If disconnected overlay is showing, transition to channel screen
+    if (channelDisconnected.style.display === "flex") {
+      channelDisconnected.style.display = "none";
+      resetReconnectBtn();
+      channelScreen.style.display = "flex";
+      statusContainer.style.display = "none";
+      parent.postMessage({ pluginMessage: { type: "resize", width: 360, height: 286 } }, "*");
+    }
+    channelState = "error";
+    channelErrorText.textContent = message || "Connection failed";
+    updateChannelUI();
+  }
+
+  function showConnectedUI(channel) {
+    channelScreen.style.display = "none";
+    channelDisconnected.style.display = "none";
+    sessionPickerEl.style.display = "none";
+    statusContainer.style.display = "flex";
+    currentPort = channel;
+    resetReconnectBtn();
+    resizeForCurrentMode();
+  }
+
+  // ─── Session Picker ──────────────────────────────────────────────────────
+
+  var sessionPickerEl = document.getElementById("session-picker");
+  var sessionListEl = document.getElementById("session-list");
+  var newSessionBtn = document.getElementById("new-session-btn");
+  var activeSessionName = null;
+
+  var spIdleText = document.getElementById("sp-idle-text");
+  var idlePhrases = [
+    "Rex is ready to go! Come on.\nWhat are we designing?",
+    "Your tireless design partner.\nJust say the word.",
+    "The forge is hot.\nWhat are we building?",
+    "Rex awaits your command.\nLet's make something.",
+    "Got a design challenge?\nBring it on.",
+  ];
+
+  function showSessionPicker() {
+    channelScreen.style.display = "none";
+    channelDisconnected.style.display = "none";
+    statusContainer.style.display = "none";
+    statusContainer.classList.add("hidden");
+    if (chatContainer) chatContainer.classList.remove("active");
+    sessionPickerEl.style.display = "flex";
+    // Set idle text
+    spIdleText.textContent = idlePhrases[Math.floor(Math.random() * idlePhrases.length)];
+    // Request sessions from server
+    parent.postMessage({ pluginMessage: { type: "fetch-sessions" } }, "*");
+    // Resize
+    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
+  }
+
+  function hideSessionPicker() {
+    sessionPickerEl.style.display = "none";
+  }
+
+  // ─── Session History View ────────────────────────────────────────────────
+
+  var sessionHistoryEl = document.getElementById("session-history");
+  var shContent = document.getElementById("sh-content");
+
+  function showSessionHistory() {
+    channelScreen.style.display = "none";
+    channelDisconnected.style.display = "none";
+    statusContainer.style.display = "none";
+    statusContainer.classList.add("hidden");
+    sessionPickerEl.style.display = "none";
+    if (chatContainer) chatContainer.classList.remove("active");
+    sessionHistoryEl.style.display = "flex";
+    isChatMode = false;
+    // Fetch all sessions
+    parent.postMessage({ pluginMessage: { type: "fetch-sessions" } }, "*");
+    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
+  }
+
+  function hideSessionHistory() {
+    sessionHistoryEl.style.display = "none";
+  }
+
+  function getDateGroup(timestamp) {
+    var now = new Date();
+    var d = new Date(timestamp);
+    if (now.toDateString() === d.toDateString()) return "TODAY";
+    var yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (yesterday.toDateString() === d.toDateString()) return "YESTERDAY";
+    var months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    return months[d.getMonth()] + " " + d.getDate();
+  }
+
+  function renderSessionHistory(sessions) {
+    shContent.innerHTML = "";
+    if (!sessions || sessions.length === 0) {
+      var empty = document.createElement("div");
+      empty.id = "session-empty";
+      empty.textContent = "No sessions yet.";
+      shContent.appendChild(empty);
+      return;
+    }
+
+    // Group sessions by date
+    var groups = {};
+    var groupOrder = [];
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i];
+      var group = getDateGroup(s.lastMessageAt || s.createdAt);
+      if (!groups[group]) {
+        groups[group] = [];
+        groupOrder.push(group);
+      }
+      groups[group].push(s);
+    }
+
+    // Render each date group
+    for (var g = 0; g < groupOrder.length; g++) {
+      var groupName = groupOrder[g];
+      var groupSessions = groups[groupName];
+
+      var dateGroup = document.createElement("div");
+      dateGroup.className = "sh-date-group";
+
+      var dateLabel = document.createElement("div");
+      dateLabel.className = "sh-date-label";
+      dateLabel.textContent = groupName;
+      dateGroup.appendChild(dateLabel);
+
+      for (var j = 0; j < groupSessions.length; j++) {
+        var sess = groupSessions[j];
+
+        if (j > 0) {
+          var divider = document.createElement("div");
+          divider.className = "session-divider";
+          dateGroup.appendChild(divider);
+        }
+
+        var row = document.createElement("div");
+        row.className = "session-row";
+        row.setAttribute("data-session-id", sess.sessionId);
+
+        var top = document.createElement("div");
+        top.className = "session-row-top";
+
+        var name = document.createElement("div");
+        name.className = "session-row-name";
+        name.textContent = sess.name || "Untitled Session";
+        top.appendChild(name);
+
+        var time = document.createElement("div");
+        time.className = "session-row-time";
+        time.textContent = formatSessionTime(sess.lastMessageAt || sess.createdAt);
+        top.appendChild(time);
+
+        var delBtn = document.createElement("button");
+        delBtn.className = "session-row-delete";
+        delBtn.textContent = "×";
+        delBtn.addEventListener("click", (function(sid) {
+          return function(e) {
+            e.stopPropagation();
+            parent.postMessage({ pluginMessage: { type: "session-delete", sessionId: sid } }, "*");
+          };
+        })(sess.sessionId));
+        top.appendChild(delBtn);
+
+        row.appendChild(top);
+
+        if (sess.summary) {
+          var summary = document.createElement("div");
+          summary.className = "session-row-summary";
+          summary.textContent = sess.summary;
+          row.appendChild(summary);
+        }
+
+        row.addEventListener("click", (function(sid) {
+          return function() {
+            hideSessionHistory();
+            chatMessages.innerHTML = "";
+            showHistoryLoading();
+            switchToChat();
+            parent.postMessage({ pluginMessage: { type: "session-select", sessionId: sid } }, "*");
+          };
+        })(sess.sessionId));
+
+        dateGroup.appendChild(row);
+      }
+
+      shContent.appendChild(dateGroup);
+    }
+  }
+
+  // Session history header pill handlers
+  document.getElementById("sh-pill-status").addEventListener("click", function() {
+    hideSessionHistory();
+    switchToStatus();
+  });
+  document.getElementById("sh-pill-talk").addEventListener("click", function() {
+    hideSessionHistory();
+    showSessionPicker();
+  });
+  // sh-pill-sessions — already on this view, no action
+
+  function formatSessionTime(timestamp) {
+    var now = new Date();
+    var d = new Date(timestamp);
+    var diff = now.getTime() - d.getTime();
+    var oneDay = 86400000;
+    if (diff < oneDay && now.getDate() === d.getDate()) {
+      // Today — show time
+      var h = d.getHours();
+      var m = d.getMinutes();
+      var ampm = h >= 12 ? "PM" : "AM";
+      h = h % 12 || 12;
+      return h + ":" + (m < 10 ? "0" : "") + m + " " + ampm;
+    } else if (diff < 2 * oneDay && now.getDate() - d.getDate() === 1) {
+      return "Yesterday";
+    } else {
+      var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return months[d.getMonth()] + " " + d.getDate();
+    }
+  }
+
+  var allSessions = []; // Store full list for "view all"
+
+  function renderSessionList(sessions, showAll) {
+    if (sessions && sessions.length > 0) allSessions = sessions;
+    var displaySessions = showAll ? allSessions : (sessions || allSessions);
+    sessionListEl.innerHTML = "";
+    if (!displaySessions || displaySessions.length === 0) {
+      var empty = document.createElement("div");
+      empty.id = "session-empty";
+      empty.textContent = "No sessions yet. Start a new one!";
+      sessionListEl.appendChild(empty);
+      return;
+    }
+    var maxItems = showAll ? displaySessions.length : Math.min(displaySessions.length, 3);
+    for (var i = 0; i < maxItems; i++) {
+      var s = displaySessions[i];
+      if (i > 0) {
+        var divider = document.createElement("div");
+        divider.className = "session-divider";
+        sessionListEl.appendChild(divider);
+      }
+      var row = document.createElement("div");
+      row.className = "session-row";
+      row.setAttribute("data-session-id", s.sessionId);
+
+      var top = document.createElement("div");
+      top.className = "session-row-top";
+
+      var name = document.createElement("div");
+      name.className = "session-row-name";
+      name.textContent = s.name || "Untitled Session";
+      top.appendChild(name);
+
+      var time = document.createElement("div");
+      time.className = "session-row-time";
+      time.textContent = formatSessionTime(s.lastMessageAt || s.createdAt);
+      top.appendChild(time);
+
+      row.appendChild(top);
+
+      if (s.summary) {
+        var summary = document.createElement("div");
+        summary.className = "session-row-summary";
+        summary.textContent = s.summary;
+        row.appendChild(summary);
+      }
+
+      row.addEventListener("click", (function(sid) {
+        return function() {
+          // Immediately switch to chat with loading indicator
+          hideSessionPicker();
+          chatMessages.innerHTML = "";
+          showHistoryLoading();
+          switchToChat();
+          parent.postMessage({ pluginMessage: { type: "session-select", sessionId: sid } }, "*");
+        };
+      })(s.sessionId));
+
+      sessionListEl.appendChild(row);
+    }
+  }
+
+  var chatSessionBar = document.getElementById("chat-session-bar");
+  var chatSessionNameEl = document.getElementById("chat-session-name");
+
+  function updateSessionBar(name) {
+    activeSessionName = name || "New Session";
+    chatSessionNameEl.textContent = activeSessionName;
+    chatSessionBar.classList.add("visible");
+  }
+
+  function hideSessionBar() {
+    chatSessionBar.classList.remove("visible");
+  }
+
+  function onSessionCreated(session) {
+    hideSessionPicker();
+    updateSessionBar(session ? session.name : "New Session");
+    chatMessages.innerHTML = "";
+    switchToChat();
+  }
+
+  function onSessionSelected(messages, sessionName, source) {
+    hideSessionPicker();
+    updateSessionBar(sessionName);
+
+    if (source === "cache") {
+      // Phase 1: instant render from cache — only if chat is empty
+      if (chatMessages.children.length === 0) {
+        if (messages && messages.length > 0) {
+          renderChatHistory(messages, "cache");
+        } else {
+          // No cache — show loading while waiting for remote
+          showHistoryLoading();
+        }
+      }
+      switchToChat();
+    } else {
+      // Phase 2: remote (authoritative) — clear and re-render
+      hideHistoryLoading();
+      // Remove only history content (keep live messages if any)
+      var existingDivider = chatMessages.querySelector(".chat-history-divider");
+      if (existingDivider) {
+        while (chatMessages.firstChild && chatMessages.firstChild !== existingDivider) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+        if (existingDivider.parentNode) existingDivider.remove();
+      } else if (chatMessages.children.length === 0 || chatMessages.querySelector("#chat-history-loading")) {
+        chatMessages.innerHTML = "";
+      }
+      if (messages && messages.length > 0) {
+        renderChatHistory(messages, "remote");
+      }
+      // Only switch to chat if not already there (cache may have done it)
+      if (!isChatMode) switchToChat();
+    }
+  }
+
+  newSessionBtn.addEventListener("click", function() {
+    parent.postMessage({ pluginMessage: { type: "session-create" } }, "*");
+  });
+
+  // Session picker pill controls
+  document.getElementById("sp-pill-status").addEventListener("click", switchToStatus);
+  document.getElementById("sp-pill-talk").addEventListener("click", function() {
+    // Go back to chat if there's an active session with messages
+    if (activeSessionName && chatMessages.children.length > 0) {
+      hideSessionPicker();
+      switchToChat();
+    }
+    // Otherwise stay in picker — user needs to pick a session first
+  });
+  // Sessions pill → go to Session History view
+  document.getElementById("sp-pill-history").addEventListener("click", function() {
+    showSessionHistory();
+  });
+  // "View previous conversations" → go to Session History view
+  document.getElementById("sp-view-all").addEventListener("click", function() {
+    showSessionHistory();
+  });
+
+  function showDisconnectedOverlay(channel) {
+    disconnectedChannelNum.textContent = channel || currentPort || "?";
+    channelDisconnected.style.display = "flex";
+    parent.postMessage({ pluginMessage: { type: "resize", width: 420, height: 539 } }, "*");
+  }
+
+  // ── Actions ──
+
+  function submitChannel() {
+    var val = channelInput.value.trim();
+    if (val.length !== 4) return;
+    var ch = parseInt(val, 10);
+    if (isNaN(ch)) return;
+    channelState = "connecting";
+    updateChannelUI();
+    parent.postMessage({ pluginMessage: { type: "channel-submit", channel: ch } }, "*");
+  }
+
+  // ── Input Handling ──
+
+  channelInput.addEventListener("keydown", function(e) {
+    if (channelState === "connecting") { e.preventDefault(); return; }
+
+    var val = channelInput.value;
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitChannel();
+    } else if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      if (val.length > 0) {
+        channelInput.value = val.slice(0, -1);
+        channelState = deriveState(channelInput.value);
+        updateChannelUI();
+      }
+    } else if (/^\d$/.test(e.key) && val.length < 4) {
+      e.preventDefault();
+      channelInput.value = val + e.key;
+      channelState = deriveState(channelInput.value);
+      updateChannelUI();
+    } else if (e.key.length === 1 || /^Arrow|Home|End$/.test(e.key)) {
+      e.preventDefault();
+    }
+  });
+
+  channelInput.addEventListener("input", function() {
+    var filtered = channelInput.value.replace(/[^\d]/g, "").slice(0, 4);
+    channelInput.value = filtered;
+    channelState = deriveState(filtered);
+    updateChannelUI();
+  });
+
+  // ── Button Handlers ──
+
+  channelConnectBtn.addEventListener("click", function() {
+    submitChannel();
+  });
+
+  reconnectBtn.addEventListener("click", function() {
+    reconnectBtn.textContent = "Reconnecting\u2026";
+    reconnectBtn.style.opacity = "0.6";
+    reconnectBtn.style.cursor = "default";
+    parent.postMessage({ pluginMessage: { type: "channel-reconnect" } }, "*");
+  });
+
+  changeChannelBtn.addEventListener("click", function() {
+    channelDisconnected.style.display = "none";
+    parent.postMessage({ pluginMessage: { type: "channel-change" } }, "*");
+  });
 </script>

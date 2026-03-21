@@ -3,7 +3,7 @@ import {
   deleteComment,
   getComments,
   postComment
-} from "./chunk-WMOEZE4I.js";
+} from "./chunk-PRDKVBQ5.js";
 import "./chunk-ZSHX4C3A.js";
 
 // src/rest-api/files.ts
@@ -78,4 +78,4 @@ export {
   getPublishedVariables,
   postComment
 };
-//# sourceMappingURL=rest-api-SQKXROZS.js.map
+//# sourceMappingURL=rest-api-DCR76CZK.js.map

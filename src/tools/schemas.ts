@@ -404,6 +404,23 @@ export const getComponentsSchema = z.object({
   limit: z.number().optional(),
 });
 
+/** extract_som — extract Screen Object Model (SOM v2) from a live Figma frame */
+export const extractSomSchema = z.object({
+  nodeId: z.string(),
+  screenType: z.string().optional(),
+  platform: z.string().optional(),
+  depth: z.number().min(1).max(20).optional(),
+  assignRoles: z.boolean().optional(),
+});
+
+/** track_frame — start observing a frame for refinement changes */
+export const trackFrameSchema = z.object({
+  nodeId: z.string(),
+  brandId: z.string().optional(),
+  screenType: z.string().optional(),
+  templateId: z.string().optional(),
+});
+
 // ============================================================================
 // 2. Write Tools -- Nodes
 // ============================================================================
@@ -918,6 +935,8 @@ export const schemaRegistry = {
   get_styles: getStylesSchema,
   get_variables: getVariablesSchema,
   get_components: getComponentsSchema,
+  extract_som: extractSomSchema,
+  track_frame: trackFrameSchema,
 
   // Write — Nodes
   create_node: createNodeSchema,

@@ -14,11 +14,19 @@
   "enablePrivatePluginApi": true,
   "networkAccess": {
     "allowedDomains": [
-      "http://localhost:7780",
-      "ws://localhost:7780",
+      "http://localhost:7780", "ws://localhost:7780",
+      "http://localhost:7781", "ws://localhost:7781",
+      "http://localhost:7782", "ws://localhost:7782",
+      "http://localhost:7783", "ws://localhost:7783",
+      "http://localhost:7784", "ws://localhost:7784",
+      "http://localhost:7785", "ws://localhost:7785",
+      "http://localhost:7786", "ws://localhost:7786",
+      "http://localhost:7787", "ws://localhost:7787",
+      "http://localhost:7788", "ws://localhost:7788",
+      "http://localhost:7789", "ws://localhost:7789",
       "https://fonts.googleapis.com",
       "https://fonts.gstatic.com"
     ],
-    "reasoning": "Local MCP relay server communication and Google Fonts for Plus Jakarta Sans"
+    "reasoning": "Local MCP relay server pool (ports 7780-7789) and Google Fonts"
   }
 }

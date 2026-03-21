@@ -38,12 +38,18 @@ declare const ConfigSchema: z.ZodObject<{
     relay: z.ZodDefault<z.ZodObject<{
         port: z.ZodDefault<z.ZodNumber>;
         host: z.ZodDefault<z.ZodString>;
+        portRangeStart: z.ZodDefault<z.ZodNumber>;
+        portRangeEnd: z.ZodDefault<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
         port: number;
         host: string;
+        portRangeStart: number;
+        portRangeEnd: number;
     }, {
         port?: number | undefined;
         host?: string | undefined;
+        portRangeStart?: number | undefined;
+        portRangeEnd?: number | undefined;
     }>>;
     polling: z.ZodDefault<z.ZodObject<{
         defaultInterval: z.ZodDefault<z.ZodNumber>;
@@ -107,6 +113,8 @@ declare const ConfigSchema: z.ZodObject<{
     relay: {
         port: number;
         host: string;
+        portRangeStart: number;
+        portRangeEnd: number;
     };
     polling: {
         defaultInterval: number;
@@ -134,6 +142,8 @@ declare const ConfigSchema: z.ZodObject<{
     relay?: {
         port?: number | undefined;
         host?: string | undefined;
+        portRangeStart?: number | undefined;
+        portRangeEnd?: number | undefined;
     } | undefined;
     polling?: {
         defaultInterval?: number | undefined;
@@ -875,6 +885,7 @@ declare class HeartbeatMonitor {
     private pingTimer;
     private pongTimeout;
     private pingSender;
+    private heartbeatPaused;
     private readonly metrics;
     private onPollTimeout;
     private onPongTimeout;
@@ -898,6 +909,16 @@ declare class HeartbeatMonitor {
     startWsHeartbeat(sendPing: () => void, onTimeout: () => void): void;
     /** Record that a pong was received. Resets missed pong counter. */
     recordPong(): void;
+    /**
+     * Pause WS heartbeat pings while the plugin is executing a command.
+     * The plugin is single-threaded and cannot respond to pings during figma.* calls.
+     */
+    pauseWsHeartbeat(): void;
+    /**
+     * Resume WS heartbeat pings after command execution completes.
+     * Resets missed pong counter since the pause was intentional.
+     */
+    resumeWsHeartbeat(): void;
     /** Record a WebSocket message. */
     recordWsMessage(): void;
     /** Stop WebSocket heartbeat monitoring. */
@@ -951,13 +972,29 @@ interface MemoryEntry {
     relatedTo?: string[];
     accessCount: number;
 }
-interface MemoryConfig {
-    enabled: boolean;
-    serviceUrl?: string;
-    mongoUri: string;
-    dbName: string;
-    maxMemoriesPerSession: number;
-    cleanupIntervalHours: number;
+/** A chat session grouping messages together. */
+interface ChatSession {
+    sessionId: string;
+    name: string;
+    summary: string;
+    fileKey: string;
+    createdAt: number;
+    lastMessageAt: number;
+    messageCount: number;
+}
+/** A single chat message persisted for history. */
+interface ChatHistoryEntry {
+    id: string;
+    role: "user" | "assistant";
+    message: string;
+    timestamp: number;
+    fileKey: string;
+    sessionId?: string;
+    selection?: Array<{
+        id: string;
+        name: string;
+        type: string;
+    }>;
 }
 /** Context passed to memory operations from the active session. */
 interface MemoryContext {
@@ -968,68 +1005,6 @@ interface MemoryContext {
     pageId?: string;
     pageName?: string;
     componentKey?: string;
-}
-
-interface CreateMemoryInput$1 {
-    scope: MemoryScope;
-    category: MemoryCategory;
-    content: string;
-    tags?: string[];
-    source?: MemorySource;
-    context: MemoryContext;
-}
-interface QueryMemoryInput$1 {
-    query?: string;
-    scope?: MemoryScope;
-    category?: MemoryCategory;
-    componentKey?: string;
-    context: MemoryContext;
-    limit?: number;
-    includeSuperseded?: boolean;
-}
-interface CleanupOptions$1 {
-    dryRun?: boolean;
-    maxAgeDays?: number;
-    minConfidence?: number;
-    removeSuperseded?: boolean;
-}
-interface CleanupResult$1 {
-    staleCount: number;
-    lowConfidenceCount: number;
-    supersededCount: number;
-    totalRemoved: number;
-    dryRun: boolean;
-}
-declare class MemoryStore {
-    private client;
-    private db;
-    private memories;
-    private config;
-    private logger;
-    constructor(config: MemoryConfig, logger: Logger);
-    /** Connect to MongoDB and set up indexes. */
-    connect(): Promise<void>;
-    /** Disconnect from MongoDB. */
-    disconnect(): Promise<void>;
-    /** Whether the memory store is connected and usable. */
-    get isConnected(): boolean;
-    /** Store a new memory. Checks for conflicts and supersedes if needed. */
-    remember(input: CreateMemoryInput$1): Promise<MemoryEntry>;
-    /** Query memories relevant to a topic. */
-    recall(input: QueryMemoryInput$1): Promise<MemoryEntry[]>;
-    /** Delete a specific memory or memories matching a query. */
-    forget(context: MemoryContext, id?: string, query?: string, scope?: MemoryScope): Promise<number>;
-    /** List memories with optional filters. */
-    list(context: MemoryContext, scope?: MemoryScope, category?: MemoryCategory, limit?: number, includeSuperseded?: boolean): Promise<MemoryEntry[]>;
-    /** Load memories for a session (called on plugin connect). */
-    loadForSession(context: MemoryContext, maxEntries?: number): Promise<MemoryEntry[]>;
-    /** Clean up stale, low-confidence, and superseded memories. */
-    cleanup(options?: CleanupOptions$1): Promise<CleanupResult$1>;
-    /** Apply confidence decay to all memories (call periodically). */
-    applyDecay(): Promise<number>;
-    private ensureConnected;
-    /** Find an existing memory with similar content in the same scope. */
-    private findSimilar;
 }
 
 interface CreateMemoryInput {
@@ -1065,9 +1040,16 @@ declare class MemoryServiceClient {
     private baseUrl;
     private logger;
     private _connected;
+    private _connecting;
     constructor(baseUrl: string, logger: Logger);
     get isConnected(): boolean;
+    get url(): string;
     connect(): Promise<void>;
+    /**
+     * Ensure the client is connected, retrying if the initial connect failed.
+     * Called lazily before each memory operation.
+     */
+    ensureConnected(): Promise<boolean>;
     disconnect(): Promise<void>;
     remember(input: CreateMemoryInput): Promise<MemoryEntry>;
     recall(input: QueryMemoryInput): Promise<MemoryEntry[]>;
@@ -1076,6 +1058,23 @@ declare class MemoryServiceClient {
     loadForSession(context: MemoryContext, maxEntries?: number): Promise<MemoryEntry[]>;
     cleanup(options?: CleanupOptions): Promise<CleanupResult>;
     applyDecay(): Promise<number>;
+    /**
+     * Persist a chat message to the memory service. Fire-and-forget — caller
+     * should not await this and should catch errors.
+     */
+    saveChatMessage(entry: ChatHistoryEntry, context: MemoryContext): Promise<void>;
+    /**
+     * Retrieve chat history for a file, sorted by timestamp ascending.
+     */
+    getChatHistory(context: MemoryContext, limit?: number): Promise<ChatHistoryEntry[]>;
+    /** Create a new chat session. */
+    createSession(session: ChatSession, context: MemoryContext): Promise<void>;
+    /** List recent chat sessions for the current file, sorted by lastMessageAt descending. */
+    listSessions(context: MemoryContext, limit?: number): Promise<ChatSession[]>;
+    /** Update a session's metadata (name, summary, messageCount, lastMessageAt). */
+    updateSession(session: ChatSession, context: MemoryContext): Promise<void>;
+    /** Get messages for a specific session, sorted by timestamp ascending. */
+    getSessionMessages(sessionId: string, context: MemoryContext, limit?: number): Promise<ChatHistoryEntry[]>;
     private post;
 }
 
@@ -1090,14 +1089,27 @@ declare class RelayServer {
     private wsClient;
     private startTime;
     private pollingState;
+    private _boundPort;
+    /** The port the relay actually bound to (may differ from config if port was in use). */
+    get boundPort(): number;
+    private readonly CHAT_INBOX_MAX;
     private chatInbox;
     private chatWaiters;
+    private readonly CHAT_OUTBOX_MAX;
     private chatOutbox;
     private readonly commentWatcher;
     private readonly memoryConfig;
     private _memoryStore;
+    private streamAccumulator;
+    private _activeChatSession;
+    /** The active chat session ID (null if no session selected). */
+    get activeChatSessionId(): string | null;
+    /** The active chat session name. */
+    get activeChatSessionName(): string | null;
+    /** Update the active session's name (called when Claude names a session). */
+    updateChatSessionName(name: string): void;
     /** Access the memory store (null if disabled/not connected). */
-    get memoryStore(): MemoryStore | MemoryServiceClient | null;
+    get memoryStore(): MemoryServiceClient | null;
     constructor(config: Config, logger: Logger);
     /** Wire command queue events to heartbeat metrics. */
     private wireQueueEvents;
@@ -1106,6 +1118,12 @@ declare class RelayServer {
      * Binds HTTP + WebSocket to the configured host:port.
      */
     start(): Promise<void>;
+    /**
+     * Try each port in the configured range until one binds successfully.
+     * If port is 0 (test mode), let the OS assign a random port.
+     * Returns the port that was bound.
+     */
+    private bindToAvailablePort;
     /**
      * Stop the relay server gracefully.
      */
@@ -1122,19 +1140,10 @@ declare class RelayServer {
     private _activityState;
     /** Whether any tools are currently active (for polling responses). */
     get isActive(): boolean;
-    /** Whether wait_for_chat is actively listening (for plugin to show/hide chat button). */
-    private _chatListening;
-    private chatListeningGraceTimer;
-    get chatListening(): boolean;
-    private setChatListening;
-    /**
-     * Schedule chatListening = false after a grace period.
-     * Cancelled if wait_for_chat is called again before it fires.
-     */
-    private scheduleChatListeningTimeout;
     /**
      * Called by the plugin to send a chat message.
-     * If an MCP tool is long-polling (via wait_for_chat), resolve it immediately.
+     * Queue-first: message always enters the bounded FIFO inbox.
+     * If a waiter exists, it consumes from the queue immediately.
      */
     enqueueChatMessage(msg: {
         id: string;
@@ -1142,9 +1151,13 @@ declare class RelayServer {
         selection: unknown[];
         timestamp: number;
     }): void;
+    /** Number of pending chat messages in the inbox. */
+    get pendingChatCount(): number;
+    /** Persist a chat message to the remote memory service (fire-and-forget). */
+    private persistChatMessage;
     /**
-     * Called by the MCP tool `wait_for_chat` to long-poll for a message.
-     * Returns immediately if there's a queued message, otherwise waits up to timeoutMs.
+     * Called by the MCP tool `wait_for_chat` to consume a message from the queue.
+     * Returns immediately if messages are queued, otherwise waits up to timeoutMs.
      */
     waitForChatMessage(timeoutMs: number): Promise<{
         id: string;
@@ -1186,6 +1199,8 @@ declare class RelayServer {
     /**
      * Send a command to the plugin.
      * Uses WebSocket if connected, otherwise queues for HTTP polling.
+     * Pauses heartbeat while command is in-flight — the plugin is single-threaded
+     * and cannot respond to pings during figma.* execution.
      */
     sendCommand(command: Command): Promise<CommandResult>;
     private registerRoutes;

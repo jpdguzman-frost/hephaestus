@@ -56,6 +56,8 @@ import {
   executeSetCurrentPage,
 } from "./executors/pages";
 import { executeExecute, executePing } from "./executors/utility";
+import { executeExtractSom } from "./executors/som-extractor";
+import { executeTrackFrame } from "./executors/observer";
 
 // ─── Types (duplicated for sandbox isolation) ───────────────────────────────
 
@@ -493,6 +495,10 @@ const EXECUTOR_MAP: Record<string, ExecutorFn> = {
   GET_STYLES: executeGetStyles,
   GET_VARIABLES: executeGetVariables,
   GET_COMPONENTS: executeGetComponents,
+  EXTRACT_SOM: executeExtractSom,
+
+  // Observation commands
+  TRACK_FRAME: executeTrackFrame,
 
   // Utility commands
   EXECUTE: executeExecute,
@@ -500,7 +506,7 @@ const EXECUTOR_MAP: Record<string, ExecutorFn> = {
 };
 
 // Read commands that can be executed in parallel (no side effects)
-export const READ_COMMANDS = new Set(["GET_NODE", "GET_SELECTION", "SEARCH_NODES", "SCREENSHOT", "PING", "GET_STYLES", "GET_VARIABLES", "GET_COMPONENTS"]);
+export const READ_COMMANDS = new Set(["GET_NODE", "GET_SELECTION", "SEARCH_NODES", "SCREENSHOT", "PING", "GET_STYLES", "GET_VARIABLES", "GET_COMPONENTS", "EXTRACT_SOM"]);
 
 // ─── Executor Class ─────────────────────────────────────────────────────────
 

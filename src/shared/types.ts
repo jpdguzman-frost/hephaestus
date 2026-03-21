@@ -64,6 +64,10 @@ export enum CommandType {
   GET_STYLES = "GET_STYLES",
   GET_VARIABLES = "GET_VARIABLES",
   GET_COMPONENTS = "GET_COMPONENTS",
+  EXTRACT_SOM = "EXTRACT_SOM",
+
+  // Observation commands
+  TRACK_FRAME = "TRACK_FRAME",
 
   // Utility commands
   EXECUTE = "EXECUTE",

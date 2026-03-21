@@ -51,6 +51,8 @@ const TOOL_ROUTES: Record<string, ToolRoute> = {
   get_styles:     { category: "plugin", commandType: CommandType.GET_STYLES, restFallback: true },
   get_variables:  { category: "plugin", commandType: CommandType.GET_VARIABLES, restFallback: true },
   get_components: { category: "plugin", commandType: CommandType.GET_COMPONENTS, restFallback: true },
+  extract_som:    { category: "plugin", commandType: CommandType.EXTRACT_SOM },
+  track_frame:    { category: "plugin", commandType: CommandType.TRACK_FRAME },
 
   // ── Write Tools: Nodes ──────────────────────────────────────────────────
   create_node:        { category: "plugin", commandType: CommandType.CREATE_NODE },

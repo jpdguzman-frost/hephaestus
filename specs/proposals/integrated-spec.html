@@ -1,0 +1,2026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integrated Spec | Osiris Cleanup + Refinement Learning System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-elevated: #12121a;
+    --bg-card: #16161f;
+    --bg-card-hover: #1c1c28;
+    --border: #25253a;
+    --border-light: #2a2a42;
+    --text: #e8e8f0;
+    --text-dim: #8888a8;
+    --text-muted: #55556a;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108, 92, 231, 0.15);
+    --accent-bright: #8b7cf7;
+    --green: #22c55e;
+    --green-dim: rgba(34, 197, 94, 0.12);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245, 158, 11, 0.12);
+    --red: #ef4444;
+    --red-dim: rgba(239, 68, 68, 0.12);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59, 130, 246, 0.12);
+    --cyan: #06b6d4;
+    --cyan-dim: rgba(6, 182, 212, 0.12);
+    --pink: #ec4899;
+    --pink-dim: rgba(236, 72, 153, 0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) var(--bg);
+  }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .container {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  section {
+    padding: 80px 0;
+    border-bottom: 1px solid var(--border);
+    opacity: 0;
+    transform: translateY(24px);
+    animation: fadeUp 0.6s ease forwards;
+  }
+
+  section:nth-child(2) { animation-delay: 0.1s; }
+  section:nth-child(3) { animation-delay: 0.15s; }
+  section:nth-child(4) { animation-delay: 0.2s; }
+  section:nth-child(5) { animation-delay: 0.25s; }
+  section:nth-child(6) { animation-delay: 0.3s; }
+  section:nth-child(7) { animation-delay: 0.35s; }
+  section:nth-child(8) { animation-delay: 0.4s; }
+  section:nth-child(9) { animation-delay: 0.45s; }
+  section:last-child { border-bottom: none; }
+
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 120px 0 80px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 600px;
+    background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(108, 92, 231, 0.25);
+    border-radius: 100px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent-bright);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(36px, 5.5vw, 58px);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+    max-width: 780px;
+  }
+
+  .hero h1 em {
+    font-style: italic;
+    color: var(--accent-bright);
+  }
+
+  .hero-subtitle {
+    color: var(--text-dim);
+    font-size: 17px;
+    max-width: 640px;
+    line-height: 1.7;
+    margin-bottom: 32px;
+  }
+
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .hero-meta span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hero-meta span::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    background: var(--text-muted);
+    border-radius: 50%;
+  }
+
+  /* ── Section Headers ── */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+  }
+
+  h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 24px;
+    font-weight: 400;
+    margin-bottom: 16px;
+  }
+
+  .section-desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 640px;
+    margin-bottom: 48px;
+    line-height: 1.7;
+  }
+
+  /* ── Nav ── */
+  .nav-bar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10, 10, 15, 0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+  }
+
+  .nav-inner {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav-inner::-webkit-scrollbar { display: none; }
+
+  .nav-link {
+    padding: 14px 20px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+  }
+
+  .nav-link:hover {
+    color: var(--text-dim);
+    border-bottom-color: var(--border-light);
+  }
+
+  /* ── LOC Reduction Viz ── */
+  .loc-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 48px;
+  }
+
+  .loc-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.25s ease;
+  }
+
+  .loc-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+  }
+
+  .loc-card-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .loc-card-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 40px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .loc-card-delta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  /* ── Removal List ── */
+  .removal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .removal-card {
+    padding: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: all 0.25s ease;
+  }
+
+  .removal-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-light);
+  }
+
+  .removal-card.remove { border-left: 3px solid var(--red); }
+  .removal-card.simplify { border-left: 3px solid var(--amber); }
+  .removal-card.keep { border-left: 3px solid var(--green); }
+  .removal-card.evolve { border-left: 3px solid var(--blue); }
+
+  .removal-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  .removal-badge.remove { background: var(--red-dim); color: var(--red); }
+  .removal-badge.simplify { background: var(--amber-dim); color: var(--amber); }
+  .removal-badge.keep { background: var(--green-dim); color: var(--green); }
+  .removal-badge.evolve { background: var(--blue-dim); color: var(--blue); }
+
+  .removal-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .removal-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .removal-loc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  /* ── Collection Changes ── */
+  .collection-flow {
+    display: flex;
+    align-items: stretch;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+
+  .collection-col {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+  }
+
+  .collection-col::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .collection-col.before::before { background: var(--red); }
+  .collection-col.after::before { background: var(--green); }
+
+  .collection-col-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .collection-col.before .collection-col-label { color: var(--red); }
+  .collection-col.after .collection-col-label { color: var(--green); }
+
+  .collection-item {
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .collection-item.stays {
+    background: rgba(255,255,255,0.03);
+    color: var(--text);
+  }
+
+  .collection-item.removed {
+    background: var(--red-dim);
+    color: var(--red);
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+
+  .collection-item.new {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  .collection-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 48px;
+    color: var(--text-muted);
+    font-size: 24px;
+  }
+
+  /* ── Architecture Diagram ── */
+  .arch-diagram {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 32px;
+    margin-bottom: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .arch-diagram::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  .arch-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  .arch-three-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+
+  .arch-box {
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .arch-box.rex-plugin {
+    background: var(--green-dim);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+  }
+
+  .arch-box.rex-server {
+    background: var(--accent-glow);
+    border: 1px solid rgba(108, 92, 231, 0.25);
+  }
+
+  .arch-box.osiris {
+    background: var(--blue-dim);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+  }
+
+  .arch-box-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .arch-box.rex-plugin .arch-box-label { color: var(--green); }
+  .arch-box.rex-server .arch-box-label { color: var(--accent-bright); }
+  .arch-box.osiris .arch-box-label { color: var(--blue); }
+
+  .arch-box-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .arch-box-items {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .arch-box-items li {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 5px 10px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 5px;
+  }
+
+  .arch-connector-row {
+    display: flex;
+    justify-content: center;
+    gap: 80px;
+    margin: 12px 0;
+  }
+
+  .arch-arrow-down {
+    width: 1px;
+    height: 24px;
+    background: var(--border-light);
+    position: relative;
+  }
+
+  .arch-arrow-down::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: -3px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid var(--border-light);
+  }
+
+  /* ── Tables ── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 32px;
+    font-size: 13px;
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elevated);
+  }
+
+  .data-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(37, 37, 58, 0.5);
+    vertical-align: top;
+  }
+
+  .data-table tr:hover td {
+    background: var(--bg-card);
+  }
+
+  .data-table code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: rgba(255,255,255,0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--accent-bright);
+  }
+
+  .param-required {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--red-dim);
+    color: var(--red);
+  }
+
+  .param-optional {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.04);
+    color: var(--text-muted);
+  }
+
+  /* ── Schema Preview ── */
+  .schema-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+
+  .schema-header {
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .schema-header:hover { background: var(--bg-card-hover); }
+
+  .schema-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent-bright);
+  }
+
+  .schema-phase {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+
+  .schema-phase.p1 { background: var(--accent-glow); color: var(--accent-bright); }
+  .schema-phase.p2 { background: var(--green-dim); color: var(--green); }
+  .schema-phase.p3 { background: var(--amber-dim); color: var(--amber); }
+
+  .schema-body {
+    padding: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--text-dim);
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+
+  .schema-body .key { color: var(--accent-bright); }
+  .schema-body .str { color: var(--green); }
+  .schema-body .num { color: var(--amber); }
+  .schema-body .comment { color: var(--text-muted); font-style: italic; }
+  .schema-body .type { color: var(--cyan); }
+
+  /* ── Data Flow Cycle ── */
+  .cycle-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    margin-bottom: 48px;
+  }
+
+  .cycle-step {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 24px;
+    padding: 28px 0;
+    border-bottom: 1px solid rgba(37, 37, 58, 0.5);
+    position: relative;
+  }
+
+  .cycle-step:last-child { border-bottom: none; }
+
+  .cycle-step-badge {
+    text-align: right;
+    padding-top: 4px;
+  }
+
+  .cycle-step-num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .cycle-step-phase {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .cycle-step:nth-child(1) .cycle-step-num { color: var(--green); }
+  .cycle-step:nth-child(1) .cycle-step-phase { color: var(--green); }
+  .cycle-step:nth-child(2) .cycle-step-num { color: var(--blue); }
+  .cycle-step:nth-child(2) .cycle-step-phase { color: var(--blue); }
+  .cycle-step:nth-child(3) .cycle-step-num { color: var(--amber); }
+  .cycle-step:nth-child(3) .cycle-step-phase { color: var(--amber); }
+  .cycle-step:nth-child(4) .cycle-step-num { color: var(--accent-bright); }
+  .cycle-step:nth-child(4) .cycle-step-phase { color: var(--accent-bright); }
+
+  .cycle-step-content h4 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .cycle-step-content p {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .cycle-endpoints {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .cycle-endpoint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+  }
+
+  /* ── Timeline ── */
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: linear-gradient(180deg, var(--red), var(--accent), var(--green), var(--amber), var(--blue), var(--text-muted));
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 40px;
+  }
+
+  .timeline-item:last-child { padding-bottom: 0; }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -28px;
+    top: 8px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid;
+    background: var(--bg);
+  }
+
+  .timeline-item:nth-child(1)::before { border-color: var(--red); box-shadow: 0 0 8px var(--red-dim); }
+  .timeline-item:nth-child(2)::before { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+  .timeline-item:nth-child(3)::before { border-color: var(--green); }
+  .timeline-item:nth-child(4)::before { border-color: var(--amber); }
+  .timeline-item:nth-child(5)::before { border-color: var(--blue); }
+  .timeline-item:nth-child(6)::before { border-color: var(--text-muted); }
+
+  .timeline-phase {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+
+  .timeline-item:nth-child(1) .timeline-phase { color: var(--red); }
+  .timeline-item:nth-child(2) .timeline-phase { color: var(--accent-bright); }
+  .timeline-item:nth-child(3) .timeline-phase { color: var(--green); }
+  .timeline-item:nth-child(4) .timeline-phase { color: var(--amber); }
+  .timeline-item:nth-child(5) .timeline-phase { color: var(--blue); }
+  .timeline-item:nth-child(6) .timeline-phase { color: var(--text-muted); }
+
+  .timeline-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .timeline-desc {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 12px;
+  }
+
+  .timeline-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .timeline-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+  }
+
+  /* ── Score Cards ── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.25s ease;
+  }
+
+  .metric-card:hover {
+    background: var(--bg-card-hover);
+    transform: translateY(-2px);
+  }
+
+  .metric-card-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .metric-card-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .metric-card-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* ── Verdict ── */
+  .verdict {
+    background: linear-gradient(135deg, rgba(108, 92, 231, 0.08), rgba(34, 197, 94, 0.05));
+    border: 1px solid rgba(108, 92, 231, 0.2);
+    border-radius: 16px;
+    padding: 48px;
+    margin-top: 48px;
+  }
+
+  .verdict h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 28px;
+    margin-bottom: 24px;
+    line-height: 1.3;
+  }
+
+  .verdict-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-top: 32px;
+  }
+
+  .verdict-col h4 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .verdict-col ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .verdict-col li {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .verdict-col li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
+
+  .verdict-col.now li::before { background: var(--green); }
+  .verdict-col.later li::before { background: var(--text-muted); }
+
+  /* ── Replacement Mapping ── */
+  .replace-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 32px;
+  }
+
+  .replace-row {
+    display: grid;
+    grid-template-columns: 1fr 32px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+
+  .replace-old {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--red);
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+
+  .replace-arrow {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+
+  .replace-new {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--green);
+  }
+
+  /* ── Tool Cards ── */
+  .tool-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .tool-card:hover {
+    border-color: var(--border-light);
+  }
+
+  .tool-header {
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tool-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent-bright);
+  }
+
+  .tool-desc-brief {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-left: auto;
+  }
+
+  .tool-params {
+    padding: 16px 20px;
+  }
+
+  .tool-param-row {
+    display: grid;
+    grid-template-columns: 140px 80px 1fr;
+    gap: 12px;
+    padding: 6px 0;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(37, 37, 58, 0.3);
+  }
+
+  .tool-param-row:last-child { border-bottom: none; }
+
+  .tool-param-name {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+  }
+
+  .tool-param-type {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--cyan);
+    font-size: 11px;
+  }
+
+  .tool-param-desc {
+    color: var(--text-dim);
+  }
+
+  .tool-returns {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .tool-returns code {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--green);
+    font-size: 11px;
+  }
+
+  /* ── Footer ── */
+  footer {
+    padding: 48px 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .loc-grid { grid-template-columns: repeat(2, 1fr); }
+    .removal-grid { grid-template-columns: 1fr; }
+    .arch-three-col { grid-template-columns: 1fr; }
+    .collection-flow { flex-direction: column; }
+    .collection-arrow { transform: rotate(90deg); width: auto; height: 32px; }
+    .metric-grid { grid-template-columns: 1fr; }
+    .verdict-grid { grid-template-columns: 1fr; }
+    .cycle-step { grid-template-columns: 1fr; gap: 8px; }
+    .cycle-step-badge { text-align: left; display: flex; gap: 12px; align-items: baseline; }
+    .replace-row { grid-template-columns: 1fr; gap: 4px; }
+    .replace-arrow { display: none; }
+    .tool-param-row { grid-template-columns: 1fr; gap: 2px; }
+    .container { padding: 0 20px; }
+    .nav-link { padding: 12px 14px; font-size: 11px; }
+    h2 { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════ NAV ════════ -->
+<nav class="nav-bar">
+  <div class="container">
+    <div class="nav-inner">
+      <a href="#cleanup" class="nav-link">Cleanup</a>
+      <a href="#architecture" class="nav-link">Architecture</a>
+      <a href="#tools" class="nav-link">MCP Tools</a>
+      <a href="#mongodb" class="nav-link">MongoDB</a>
+      <a href="#dataflow" class="nav-link">Data Flow</a>
+      <a href="#timeline" class="nav-link">Timeline</a>
+      <a href="#metrics" class="nav-link">Metrics</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ════════ HERO ════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">Implementation-Ready Spec</div>
+    <h1>Clean the Foundation, <em>Build the Future</em></h1>
+    <p class="hero-subtitle">A unified plan to remove 1,800 lines of dead code from Osiris, then ship a Refinement Learning System across Rex and Osiris in 14 days. Templates capture 100% of designer intent. Passive observation fills the gaps. The adversarial filter prevents noise.</p>
+    <div class="hero-meta">
+      <span>March 21, 2026</span>
+      <span>Proposals 01-09 Synthesized</span>
+      <span>14-Day Implementation</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ OSIRIS CLEANUP ════════ -->
+<section id="cleanup">
+  <div class="container">
+    <div class="section-label">Part 1 &mdash; Osiris Cleanup</div>
+    <h2>Remove, Simplify, Evolve</h2>
+    <p class="section-desc">Osiris grew from a screen scoring database into a design intelligence platform. Along the way, speculative subsystems accumulated. This cleanup cuts ~40% of server.js, dropping from 1,479 LOC and 23 MCP tools down to a focused reference library.</p>
+
+    <!-- LOC Reduction Cards -->
+    <div class="loc-grid">
+      <div class="loc-card">
+        <div class="loc-card-label">Server.js LOC</div>
+        <div class="loc-card-value" style="color:var(--text)">~900</div>
+        <div class="loc-card-delta" style="color:var(--red)">-40% from 1,479</div>
+      </div>
+      <div class="loc-card">
+        <div class="loc-card-label">REST Endpoints</div>
+        <div class="loc-card-value" style="color:var(--text)">~30</div>
+        <div class="loc-card-delta" style="color:var(--red)">-35% from 45+</div>
+      </div>
+      <div class="loc-card">
+        <div class="loc-card-label">MCP Tools</div>
+        <div class="loc-card-value" style="color:var(--text)">15</div>
+        <div class="loc-card-delta" style="color:var(--red)">-35% from 23</div>
+      </div>
+      <div class="loc-card">
+        <div class="loc-card-label">Pipeline Scripts</div>
+        <div class="loc-card-value" style="color:var(--text)">3</div>
+        <div class="loc-card-delta" style="color:var(--red)">-57% from 7</div>
+      </div>
+    </div>
+
+    <!-- What Gets Removed / Simplified / Kept -->
+    <h3>Classification</h3>
+    <p class="section-desc" style="margin-bottom:24px">Every subsystem reviewed and classified. Items marked REMOVE had zero output or zero usage. Items marked EVOLVE have their intent preserved in the new architecture.</p>
+
+    <div class="removal-grid">
+      <div class="removal-card remove">
+        <div class="removal-badge remove">Remove</div>
+        <div class="removal-name">synthesizer.js</div>
+        <div class="removal-desc">Cross-industry pattern synthesis. Data directory empty. Never executed. Replaced by brand-scoped Golden Templates.</div>
+        <div class="removal-loc">~200 LOC</div>
+      </div>
+      <div class="removal-card remove">
+        <div class="removal-badge remove">Remove</div>
+        <div class="removal-name">brief-generator.js</div>
+        <div class="removal-desc">3-direction design briefs. Never executed. Claude handles brief generation contextually during builds.</div>
+        <div class="removal-loc">~250 LOC</div>
+      </div>
+      <div class="removal-card remove">
+        <div class="removal-badge remove">Remove</div>
+        <div class="removal-name">pattern-extractor.js</div>
+        <div class="removal-desc">UI component cropping/clustering. Superseded by SOM + role assignment which provides semantic clustering.</div>
+        <div class="removal-loc">~300 LOC</div>
+      </div>
+      <div class="removal-card remove">
+        <div class="removal-badge remove">Remove</div>
+        <div class="removal-name">audit.js</div>
+        <div class="removal-desc">Comprehensive design quality audit. Redundant with existing scoring rubric and per-screen analysis.</div>
+        <div class="removal-loc">~200 LOC</div>
+      </div>
+      <div class="removal-card remove">
+        <div class="removal-badge remove">Remove</div>
+        <div class="removal-name">som-refine.js + Delta System</div>
+        <div class="removal-desc">11 deltas captured, ALL had 0 matched nodes. The SOM-diffing approach is architecturally unfixable. Replaced by Track A (Templates) + Track B (Passive Observer).</div>
+        <div class="removal-loc">~588 LOC</div>
+      </div>
+      <div class="removal-card remove">
+        <div class="removal-badge remove">Remove</div>
+        <div class="removal-name">5 Delta MCP Tools</div>
+        <div class="removal-desc">capture_delta, list_deltas, get_refinement_context, extract_principles, get_principles &mdash; all dependent on the failed delta matching system.</div>
+        <div class="removal-loc">~150 LOC</div>
+      </div>
+      <div class="removal-card simplify">
+        <div class="removal-badge simplify">Simplify</div>
+        <div class="removal-name">Emotional Spectrum Scores</div>
+        <div class="removal-desc">5 emotional dimensions stored per screen but never used in search, similarity, or benchmarks. Stop computing on ingest; existing data stays.</div>
+        <div class="removal-loc">~60 LOC</div>
+      </div>
+      <div class="removal-card simplify">
+        <div class="removal-badge simplify">Simplify</div>
+        <div class="removal-name">find_similar Presets</div>
+        <div class="removal-desc">4 presets reduced to 2 (default, visual). The semantic and score presets are never referenced in any workflow.</div>
+        <div class="removal-loc">~30 LOC</div>
+      </div>
+    </div>
+
+    <!-- Collection Changes Visual -->
+    <h3 style="margin-top:48px">MongoDB Collection Changes</h3>
+    <p class="section-desc" style="margin-bottom:24px">From 5 collections with 3 dead ones, to 2 proven + 3 purpose-built new ones.</p>
+
+    <div class="collection-flow">
+      <div class="collection-col before">
+        <div class="collection-col-label">Before (5 collections)</div>
+        <div class="collection-item stays">screens</div>
+        <div class="collection-item stays">buckets</div>
+        <div class="collection-item removed">deltas</div>
+        <div class="collection-item removed">refinement_principles</div>
+        <div class="collection-item removed">distillations</div>
+      </div>
+      <div class="collection-arrow">&rarr;</div>
+      <div class="collection-col after">
+        <div class="collection-col-label">After (5 collections)</div>
+        <div class="collection-item stays">screens</div>
+        <div class="collection-item stays">buckets</div>
+        <div class="collection-item new">golden_templates</div>
+        <div class="collection-item new">refinement_records</div>
+        <div class="collection-item new">property_patterns</div>
+      </div>
+    </div>
+
+    <!-- Tool Replacement Mapping -->
+    <h3>Tool Evolution</h3>
+    <p class="section-desc" style="margin-bottom:24px">The 5 removed delta/principle tools are replaced by purpose-built alternatives with fundamentally better architecture.</p>
+
+    <div class="replace-grid">
+      <div class="replace-row">
+        <div class="replace-old">osiris_capture_delta</div>
+        <div class="replace-arrow">&rarr;</div>
+        <div class="replace-new">osiris_save_golden_template</div>
+      </div>
+      <div class="replace-row">
+        <div class="replace-old">osiris_list_deltas</div>
+        <div class="replace-arrow">&rarr;</div>
+        <div class="replace-new">osiris_list_templates</div>
+      </div>
+      <div class="replace-row">
+        <div class="replace-old">osiris_get_refinement_context</div>
+        <div class="replace-arrow">&rarr;</div>
+        <div class="replace-new">osiris_find_template + pattern query</div>
+      </div>
+      <div class="replace-row">
+        <div class="replace-old">osiris_extract_principles</div>
+        <div class="replace-arrow">&rarr;</div>
+        <div class="replace-new">Passive observer + adversarial filter</div>
+      </div>
+      <div class="replace-row">
+        <div class="replace-old">osiris_get_principles</div>
+        <div class="replace-arrow">&rarr;</div>
+        <div class="replace-new">Property patterns store query</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ ARCHITECTURE ════════ -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-label">Part 2 &mdash; System Architecture</div>
+    <h2>Responsibility Map</h2>
+    <p class="section-desc">Three systems, clear boundaries. Rex Plugin observes the canvas, Rex Server processes refinements, Osiris stores templates and brand data. Claude orchestrates the workflow.</p>
+
+    <div class="arch-diagram">
+      <div class="arch-label">System Boundary Diagram</div>
+
+      <div class="arch-three-col">
+        <div class="arch-box rex-plugin">
+          <div class="arch-box-label">Rex Plugin (Figma)</div>
+          <div class="arch-box-title">Canvas Access</div>
+          <ul class="arch-box-items">
+            <li>Execute figma.* API calls</li>
+            <li>SOM extraction (extract_som)</li>
+            <li>documentchange listener</li>
+            <li>Observation window lifecycle</li>
+            <li>Change buffer + flush to relay</li>
+            <li>Structural change clustering</li>
+          </ul>
+        </div>
+
+        <div class="arch-box rex-server">
+          <div class="arch-box-label">Rex Server (MCP)</div>
+          <div class="arch-box-title">Intelligence</div>
+          <ul class="arch-box-items">
+            <li>BuildManifest (nodeID &rarr; SOM role)</li>
+            <li>Refinement recorder</li>
+            <li>Adversarial filter (6 categories)</li>
+            <li>Pattern extraction + confidence</li>
+            <li>Pattern applicator (no-template builds)</li>
+            <li>Tool router + relay bridge</li>
+          </ul>
+        </div>
+
+        <div class="arch-box osiris">
+          <div class="arch-box-label">Osiris API</div>
+          <div class="arch-box-title">Storage + Retrieval</div>
+          <ul class="arch-box-items">
+            <li>Screen reference library (3,400+)</li>
+            <li>Golden Template CRUD</li>
+            <li>Template scoring + matching</li>
+            <li>Brand metadata + palettes</li>
+            <li>SOM storage + retrieval</li>
+            <li>Bucket insights + benchmarks</li>
+          </ul>
+        </div>
+      </div>
+
+      <div style="text-align:center;padding:24px 0 16px;">
+        <div style="display:inline-block;padding:14px 32px;background:rgba(255,255,255,0.03);border:1px solid var(--border-light);border-radius:10px;font-size:14px;font-weight:500;color:var(--text-dim);">
+          <span style="color:var(--accent-bright);font-weight:600;">Claude</span> &mdash; Orchestration layer. Template-first build workflow, content slot population, property annotation, save triggers.
+        </div>
+      </div>
+    </div>
+
+    <!-- Track A / Track B -->
+    <h3>Two Complementary Tracks</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;">
+      <div style="padding:24px;background:var(--green-dim);border:1px solid rgba(34,197,94,0.2);border-radius:12px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--green);margin-bottom:8px;">Track A &mdash; Templates</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Store refined screens as Golden Templates</div>
+        <div style="font-size:13px;color:var(--text-dim);line-height:1.6;">Captures 100% of design decisions with zero inference risk. Reuse for future builds of the same screen type. Version chain via supersession. Ships Phase 1.</div>
+      </div>
+      <div style="padding:24px;background:var(--blue-dim);border:1px solid rgba(59,130,246,0.2);border-radius:12px;">
+        <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--blue);margin-bottom:8px;">Track B &mdash; Patterns</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Observe changes, extract recurring patterns</div>
+        <div style="font-size:13px;color:var(--text-dim);line-height:1.6;">Passive documentchange listener captures property-level changes. Adversarial filter rejects noise. Confirmed patterns auto-apply on no-template builds. Ships Phase 2-3.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ NEW MCP TOOLS ════════ -->
+<section id="tools">
+  <div class="container">
+    <div class="section-label">Part 3 &mdash; New MCP Tools</div>
+    <h2>Template + Pattern Tools</h2>
+    <p class="section-desc">Five new Osiris MCP tools for Golden Template management. Combined with the 15 retained tools, Osiris exposes 20 tools total after cleanup + new features.</p>
+
+    <!-- Tool 1: save_golden_template -->
+    <div class="tool-card">
+      <div class="tool-header">
+        <span class="tool-name">osiris_save_golden_template</span>
+        <span class="tool-desc-brief">Save a refined SOM as a reusable template</span>
+      </div>
+      <div class="tool-params">
+        <div class="tool-param-row">
+          <div class="tool-param-name">brandId <span class="param-required">req</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Osiris brand slug</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">screenType <span class="param-required">req</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Controlled enum: home, payment, onboarding, settings, profile, etc.</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">som <span class="param-required">req</span></div>
+          <div class="tool-param-type">object</div>
+          <div class="tool-param-desc">Full SOM v2 tree from extract_som</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">referenceFrame <span class="param-required">req</span></div>
+          <div class="tool-param-type">object</div>
+          <div class="tool-param-desc">{ width, height } of the source frame</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">screenSubtype <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Free-form subtype (e.g., "payment-numpad")</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">tags <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string[]</div>
+          <div class="tool-param-desc">Descriptive tags for matching</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">mood <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Visual mood: premium, minimal, energetic, playful, corporate</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">density <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Layout density: compact, normal, spacious</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">platform <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Target platform (default: mobile)</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">slots <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">object[]</div>
+          <div class="tool-param-desc">Content slot definitions (text, image, repeating-group)</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">structure <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">object</div>
+          <div class="tool-param-desc">Structural metadata: sectionCount, hasCTA, hasHero, etc.</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">propertyAnnotations <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">object[]</div>
+          <div class="tool-param-desc">Brand/taste/structural tags per property</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">supersedes <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Template ID this replaces (creates supersession chain)</div>
+        </div>
+      </div>
+      <div class="tool-returns">Returns: <code>{ templateId, version, generation }</code></div>
+    </div>
+
+    <!-- Tool 2: find_template -->
+    <div class="tool-card">
+      <div class="tool-header">
+        <span class="tool-name">osiris_find_template</span>
+        <span class="tool-desc-brief">Search for matching templates by attributes</span>
+      </div>
+      <div class="tool-params">
+        <div class="tool-param-row">
+          <div class="tool-param-name">brandId <span class="param-required">req</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Brand to search</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">screenType <span class="param-required">req</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Screen type to match</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">tags <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string[]</div>
+          <div class="tool-param-desc">Tags for Jaccard similarity scoring</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">mood <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Mood to match</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">platform <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Platform filter (default: mobile)</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">limit <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">number</div>
+          <div class="tool-param-desc">Max results (default: 3)</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">includeOtherBrands <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">boolean</div>
+          <div class="tool-param-desc">Fall back to other brands if no match (default: false)</div>
+        </div>
+      </div>
+      <div class="tool-returns">Returns: <code>[{ template, score, matchBreakdown }]</code> &mdash; Min score threshold: 0.3</div>
+    </div>
+
+    <!-- Tool 3: get_template -->
+    <div class="tool-card">
+      <div class="tool-header">
+        <span class="tool-name">osiris_get_template</span>
+        <span class="tool-desc-brief">Retrieve a specific template by ID</span>
+      </div>
+      <div class="tool-params">
+        <div class="tool-param-row">
+          <div class="tool-param-name">templateId <span class="param-required">req</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Template ID</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">includeLineage <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">boolean</div>
+          <div class="tool-param-desc">Include supersession chain (default: false)</div>
+        </div>
+      </div>
+      <div class="tool-returns">Returns: Full <code>GoldenTemplate</code> object, optionally with <code>lineage[]</code></div>
+    </div>
+
+    <!-- Tool 4: list_templates -->
+    <div class="tool-card">
+      <div class="tool-header">
+        <span class="tool-name">osiris_list_templates</span>
+        <span class="tool-desc-brief">List all templates for a brand</span>
+      </div>
+      <div class="tool-params">
+        <div class="tool-param-row">
+          <div class="tool-param-name">brandId <span class="param-required">req</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Brand slug</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">screenType <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Filter by screen type</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">headsOnly <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">boolean</div>
+          <div class="tool-param-desc">Only latest versions (default: true)</div>
+        </div>
+      </div>
+      <div class="tool-returns">Returns: Array of template summaries (metadata only, no SOM body)</div>
+    </div>
+
+    <!-- Tool 5: deprecate_template -->
+    <div class="tool-card">
+      <div class="tool-header">
+        <span class="tool-name">osiris_deprecate_template</span>
+        <span class="tool-desc-brief">Mark a template as deprecated</span>
+      </div>
+      <div class="tool-params">
+        <div class="tool-param-row">
+          <div class="tool-param-name">templateId <span class="param-required">req</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Template to deprecate</div>
+        </div>
+        <div class="tool-param-row">
+          <div class="tool-param-name">reason <span class="param-optional">opt</span></div>
+          <div class="tool-param-type">string</div>
+          <div class="tool-param-desc">Why it was deprecated</div>
+        </div>
+      </div>
+      <div class="tool-returns">Returns: <code>{ success: true }</code></div>
+    </div>
+
+    <!-- Scoring Algorithm -->
+    <h3 style="margin-top:48px;">Template Scoring Algorithm</h3>
+    <p class="section-desc" style="margin-bottom:24px;">find_template uses a weighted scoring model to rank matches. Only templates where supersededBy is null (head of chain) are returned.</p>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Signal</th>
+          <th>Weight</th>
+          <th>Logic</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Screen type exact match</td>
+          <td><code>0.35</code></td>
+          <td style="color:var(--text-dim)">Exact = 1.0, partial (shared prefix) = 0.6</td>
+        </tr>
+        <tr>
+          <td>Tag overlap</td>
+          <td><code>0.20</code></td>
+          <td style="color:var(--text-dim)">Jaccard similarity</td>
+        </tr>
+        <tr>
+          <td>Mood match</td>
+          <td><code>0.15</code></td>
+          <td style="color:var(--text-dim)">Exact = 1.0, compatible = 0.5</td>
+        </tr>
+        <tr>
+          <td>Recency</td>
+          <td><code>0.15</code></td>
+          <td style="color:var(--text-dim)">1 - (daysSinceRefinement / 180), clamped [0, 1]</td>
+        </tr>
+        <tr>
+          <td>Usage count</td>
+          <td><code>0.10</code></td>
+          <td style="color:var(--text-dim)">min(usageCount / 20, 1.0)</td>
+        </tr>
+        <tr>
+          <td>Generation</td>
+          <td><code>0.05</code></td>
+          <td style="color:var(--text-dim)">min(generation / 5, 1.0)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ════════ MONGODB CHANGES ════════ -->
+<section id="mongodb">
+  <div class="container">
+    <div class="section-label">Part 4 &mdash; MongoDB Changes</div>
+    <h2>Collection Schemas</h2>
+    <p class="section-desc">Three new collections added across Phases 1-3. Each is purpose-built for a specific pipeline stage. Click to expand schema previews.</p>
+
+    <!-- golden_templates -->
+    <div class="schema-card">
+      <div class="schema-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <span class="schema-name">golden_templates</span>
+        <span class="schema-phase p1">Phase 1</span>
+      </div>
+      <div class="schema-body"><span class="comment">// Refined SOMs as reusable build plans</span>
+{
+  <span class="key">_id</span>: ObjectId,
+  <span class="key">brandId</span>: <span class="str">"revolut"</span>,              <span class="comment">// Osiris brand slug</span>
+  <span class="key">version</span>: <span class="num">3</span>,                      <span class="comment">// Increments on re-refinement</span>
+  <span class="key">screenType</span>: <span class="str">"payment"</span>,           <span class="comment">// Controlled enum</span>
+  <span class="key">screenSubtype</span>: <span class="str">"payment-numpad"</span>,  <span class="comment">// Free-form</span>
+  <span class="key">tags</span>: [<span class="str">"dark-mode"</span>, <span class="str">"numpad"</span>, <span class="str">"amount-entry"</span>],
+  <span class="key">mood</span>: <span class="str">"premium"</span>,                 <span class="comment">// premium | minimal | energetic | playful | corporate</span>
+  <span class="key">density</span>: <span class="str">"normal"</span>,               <span class="comment">// compact | normal | spacious</span>
+  <span class="key">platform</span>: <span class="str">"mobile"</span>,
+
+  <span class="key">som</span>: { <span class="comment">/* Full SOM v2 tree */</span> },
+  <span class="key">referenceFrame</span>: { <span class="key">width</span>: <span class="num">390</span>, <span class="key">height</span>: <span class="num">844</span> },
+
+  <span class="key">slots</span>: [{
+    <span class="key">slotId</span>: <span class="str">"hero-title"</span>,
+    <span class="key">nodeId</span>: <span class="str">"som-node-23"</span>,
+    <span class="key">role</span>: <span class="str">"label"</span>,
+    <span class="key">type</span>: <span class="str">"text"</span>,                  <span class="comment">// text | image | repeating-group</span>
+    <span class="key">defaultValue</span>: <span class="str">"Send Money"</span>
+  }],
+
+  <span class="key">structure</span>: {
+    <span class="key">sectionCount</span>: <span class="num">4</span>, <span class="key">hasCTA</span>: <span class="num">true</span>, <span class="key">hasHero</span>: <span class="num">false</span>,
+    <span class="key">hasBottomNav</span>: <span class="num">false</span>, <span class="key">cardCount</span>: <span class="num">2</span>
+  },
+
+  <span class="key">propertyAnnotations</span>: [
+    { <span class="key">somNodeId</span>: <span class="str">"som-5"</span>, <span class="key">property</span>: <span class="str">"fills"</span>, <span class="key">source</span>: <span class="str">"brand"</span> },
+    { <span class="key">somNodeId</span>: <span class="str">"som-1"</span>, <span class="key">property</span>: <span class="str">"cornerRadius"</span>, <span class="key">source</span>: <span class="str">"taste"</span> }
+  ],
+
+  <span class="key">sourceScreenId</span>: <span class="str">"scr_abc123"</span>,     <span class="comment">// Osiris screen this derived from</span>
+  <span class="key">supersedes</span>: ObjectId(<span class="str">"..."</span>),       <span class="comment">// Previous version (null for gen 1)</span>
+  <span class="key">supersededBy</span>: <span class="num">null</span>,
+  <span class="key">generation</span>: <span class="num">3</span>,
+
+  <span class="key">usageCount</span>: <span class="num">12</span>,
+  <span class="key">lastUsedAt</span>: ISODate(<span class="str">"2026-03-15"</span>),
+  <span class="key">createdAt</span>: ISODate(<span class="str">"2026-02-01"</span>),
+  <span class="key">updatedAt</span>: ISODate(<span class="str">"2026-03-15"</span>)
+}
+
+<span class="comment">// Indexes</span>
+{ <span class="key">brandId</span>: <span class="num">1</span>, <span class="key">screenType</span>: <span class="num">1</span>, <span class="key">supersededBy</span>: <span class="num">1</span>, <span class="key">generation</span>: <span class="num">-1</span> }
+{ <span class="key">brandId</span>: <span class="num">1</span>, <span class="key">tags</span>: <span class="num">1</span> }
+{ <span class="key">supersedes</span>: <span class="num">1</span> }
+{ <span class="key">usageCount</span>: <span class="num">-1</span> }</div>
+    </div>
+
+    <!-- refinement_records -->
+    <div class="schema-card">
+      <div class="schema-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <span class="schema-name">refinement_records</span>
+        <span class="schema-phase p2">Phase 2</span>
+      </div>
+      <div class="schema-body"><span class="comment">// Raw observation data from documentchange</span>
+{
+  <span class="key">_id</span>: ObjectId,
+  <span class="key">sessionId</span>: <span class="str">"sess_xyz"</span>,
+  <span class="key">brandId</span>: <span class="str">"kraken"</span>,
+  <span class="key">screenType</span>: <span class="str">"payment"</span>,
+  <span class="key">frameId</span>: <span class="str">"23:2563"</span>,
+
+  <span class="key">propertyChanges</span>: [{
+    <span class="key">nodeId</span>: <span class="str">"123:456"</span>,
+    <span class="key">somRole</span>: <span class="str">"screen"</span>,
+    <span class="key">somName</span>: <span class="str">"payment-root"</span>,
+    <span class="key">property</span>: <span class="str">"cornerRadius"</span>,
+    <span class="key">before</span>: <span class="num">0</span>,
+    <span class="key">after</span>: <span class="num">24</span>,
+    <span class="key">propertyCategory</span>: <span class="str">"layout"</span>    <span class="comment">// layout | color | typography | structural</span>
+  }],
+
+  <span class="key">structuralClusters</span>: [{
+    <span class="key">timestamp</span>: <span class="num">1711000000000</span>,
+    <span class="key">events</span>: [
+      { <span class="key">type</span>: <span class="str">"CREATE"</span>, <span class="key">nodeId</span>: <span class="str">"789:012"</span> },
+      { <span class="key">type</span>: <span class="str">"PROPERTY_CHANGE"</span>, <span class="key">nodeId</span>: <span class="str">"345:678"</span> }
+    ],
+    <span class="key">affectedSubtree</span>: <span class="str">"23:2563"</span>,
+    <span class="key">duration</span>: <span class="num">2000</span>              <span class="comment">// ms</span>
+  }],
+
+  <span class="key">duration</span>: <span class="num">240000</span>,               <span class="comment">// Total refinement time in ms</span>
+  <span class="key">changeCount</span>: <span class="num">15</span>,
+  <span class="key">createdAt</span>: ISODate(<span class="str">"2026-03-21"</span>)
+}
+
+<span class="comment">// Indexes</span>
+{ <span class="key">brandId</span>: <span class="num">1</span>, <span class="key">screenType</span>: <span class="num">1</span> }
+{ <span class="key">sessionId</span>: <span class="num">1</span> }
+{ <span class="key">createdAt</span>: <span class="num">-1</span> }</div>
+    </div>
+
+    <!-- property_patterns -->
+    <div class="schema-card">
+      <div class="schema-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <span class="schema-name">property_patterns</span>
+        <span class="schema-phase p3">Phase 3</span>
+      </div>
+      <div class="schema-body"><span class="comment">// Recurring property adjustments with confidence</span>
+{
+  <span class="key">_id</span>: ObjectId,
+  <span class="key">brandId</span>: <span class="str">"kraken"</span>,
+  <span class="key">scope</span>: <span class="str">"brand"</span>,                    <span class="comment">// brand | universal</span>
+
+  <span class="key">targetRole</span>: <span class="str">"screen"</span>,              <span class="comment">// SOM role this applies to</span>
+  <span class="key">targetProperty</span>: <span class="str">"cornerRadius"</span>,
+
+  <span class="key">pattern</span>: {
+    <span class="key">type</span>: <span class="str">"override"</span>,                <span class="comment">// override | increase | decrease | clamp | replace</span>
+    <span class="key">value</span>: <span class="num">24</span>
+  },
+
+  <span class="key">confidence</span>: <span class="num">0.85</span>,
+  <span class="key">status</span>: <span class="str">"confirmed"</span>,               <span class="comment">// observed | recurring | candidate | confirmed | tombstoned</span>
+  <span class="key">observedCount</span>: <span class="num">5</span>,
+  <span class="key">lastSeen</span>: ISODate(<span class="str">"2026-03-20"</span>),
+  <span class="key">firstSeen</span>: ISODate(<span class="str">"2026-03-01"</span>),
+
+  <span class="key">evidenceSessions</span>: [<span class="str">"sess_1"</span>, <span class="str">"sess_2"</span>, <span class="str">"sess_3"</span>],
+
+  <span class="key">rejectionCount</span>: <span class="num">0</span>,
+  <span class="key">lastRejectedAt</span>: <span class="num">null</span>
+}
+
+<span class="comment">// Indexes</span>
+{ <span class="key">brandId</span>: <span class="num">1</span>, <span class="key">targetRole</span>: <span class="num">1</span>, <span class="key">targetProperty</span>: <span class="num">1</span> }
+{ <span class="key">brandId</span>: <span class="num">1</span>, <span class="key">status</span>: <span class="num">1</span>, <span class="key">confidence</span>: <span class="num">-1</span> }</div>
+    </div>
+
+    <!-- Collections Removed -->
+    <h3 style="margin-top:32px;">Collections Dropped</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Collection</th>
+          <th>Records</th>
+          <th>Reason</th>
+          <th>Mitigation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>deltas</code></td>
+          <td style="color:var(--text-dim)">11</td>
+          <td style="color:var(--text-dim)">All 11 records had 0 matched nodes. Matching algorithm is fundamentally broken.</td>
+          <td style="color:var(--text-dim)">Export to JSON backup before dropping.</td>
+        </tr>
+        <tr>
+          <td><code>refinement_principles</code></td>
+          <td style="color:var(--text-dim)">0</td>
+          <td style="color:var(--text-dim)">Empty. Never populated (output of broken delta pipeline).</td>
+          <td style="color:var(--text-dim)">None needed.</td>
+        </tr>
+        <tr>
+          <td><code>distillations</code></td>
+          <td style="color:var(--text-dim)">&mdash;</td>
+          <td style="color:var(--text-dim)">Redundant with bucket insights and Claude's on-the-fly analysis.</td>
+          <td style="color:var(--text-dim)">Verify no unique content before dropping.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ════════ DATA FLOW ════════ -->
+<section id="dataflow">
+  <div class="container">
+    <div class="section-label">Part 5 &mdash; Data Flow</div>
+    <h2>Build &rarr; Refine &rarr; Learn &rarr; Reuse</h2>
+    <p class="section-desc">The complete learning cycle. Every refinement session makes the system better. Templates capture whole-screen decisions, patterns capture cross-screen preferences.</p>
+
+    <div class="cycle-container">
+      <div class="cycle-step">
+        <div class="cycle-step-badge">
+          <div class="cycle-step-num">01</div>
+          <div class="cycle-step-phase">Build</div>
+        </div>
+        <div class="cycle-step-content">
+          <h4>Search for a Template, Fall Back to Reference</h4>
+          <p>Claude calls <code>osiris_find_template</code> with brand, screen type, tags, and mood. If a template matches (score > 0.3), Claude uses its SOM as the build plan, populating content slots and replacing brand-specific properties. If no template, Claude falls back to <code>osiris_search_screens</code> + <code>osiris_get_screen_som</code> and applies any confirmed property patterns (confidence >= 0.7). Rex builds via create_node with BuildManifest tracking every node-to-role mapping.</p>
+          <div class="cycle-endpoints">
+            <span class="cycle-endpoint">osiris_find_template</span>
+            <span class="cycle-endpoint">osiris_get_template</span>
+            <span class="cycle-endpoint">osiris_search_screens</span>
+            <span class="cycle-endpoint">osiris_get_screen_som</span>
+            <span class="cycle-endpoint">rex create_node</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cycle-step">
+        <div class="cycle-step-badge">
+          <div class="cycle-step-num">02</div>
+          <div class="cycle-step-phase">Refine</div>
+        </div>
+        <div class="cycle-step-content">
+          <h4>Designer Edits, Plugin Observes Silently</h4>
+          <p>After build completes, the plugin starts an observation window. The <code>documentchange</code> listener captures every property change within the built frame's subtree. Changes are buffered and flushed to the relay every 2 seconds via existing HTTP polling. The BuildManifest maps each changed Figma node ID back to its SOM role. Window closes on: idle 60s, designer says "done", new build starts, or page switch.</p>
+          <div class="cycle-endpoints">
+            <span class="cycle-endpoint">plugin/observer.ts</span>
+            <span class="cycle-endpoint">documentchange</span>
+            <span class="cycle-endpoint">BuildManifest.get()</span>
+            <span class="cycle-endpoint">change buffer flush</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cycle-step">
+        <div class="cycle-step-badge">
+          <div class="cycle-step-num">03</div>
+          <div class="cycle-step-phase">Learn</div>
+        </div>
+        <div class="cycle-step-content">
+          <h4>Classify, Filter, Extract, Store</h4>
+          <p>The refinement recorder assembles change buffers into RefinementRecords and stores them in MongoDB. The adversarial filter classifies each change into 6 categories: revert detection, artifact cleanup, AI error correction, platform convention, content-driven, or genuine preference. Only genuine preferences enter the pattern pipeline. Patterns are grouped by (brandId, somRole, property). Confidence scores accumulate: 5+ consistent observations reach "confirmed" status. 8+ auto-promote silently.</p>
+          <div class="cycle-endpoints">
+            <span class="cycle-endpoint">refinement/recorder.ts</span>
+            <span class="cycle-endpoint">refinement/filter.ts</span>
+            <span class="cycle-endpoint">refinement/patterns.ts</span>
+            <span class="cycle-endpoint">refinement_records</span>
+            <span class="cycle-endpoint">property_patterns</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cycle-step">
+        <div class="cycle-step-badge">
+          <div class="cycle-step-num">04</div>
+          <div class="cycle-step-phase">Reuse</div>
+        </div>
+        <div class="cycle-step-content">
+          <h4>Save Template, Apply Patterns Next Time</h4>
+          <p>When the observation window closes, Claude prompts: "Save this as a template?" If yes, Claude runs <code>extract_som</code> on the refined frame, identifies content slots, tags property annotations (brand vs. taste), and calls <code>osiris_save_golden_template</code>. The template enters the supersession chain. Next time the same screen type is requested, the template is found first. On no-template builds, confirmed patterns auto-adjust node values. Override detection tracks whether the designer keeps or reverts pattern-applied values.</p>
+          <div class="cycle-endpoints">
+            <span class="cycle-endpoint">rex extract_som</span>
+            <span class="cycle-endpoint">osiris_save_golden_template</span>
+            <span class="cycle-endpoint">refinement/applicator.ts</span>
+            <span class="cycle-endpoint">override detection</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cold Start -->
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px;margin-top:16px;">
+      <h4 style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--amber)">Cold Start: Zero Templates</h4>
+      <p style="font-size:14px;color:var(--text-dim);line-height:1.7;">The first build works identically to today: reference search, SOM extraction, Rex build. The designer refines heavily (15-20 changes). Claude saves the result as a Generation 1 template. After 5-10 sessions covering common screen types, most requests hit a template. No special cold-start infrastructure needed. Optional: batch import 10-20 existing Figma screens to seed templates in one session.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ TIMELINE ════════ -->
+<section id="timeline">
+  <div class="container">
+    <div class="section-label">Part 6 &mdash; Implementation</div>
+    <h2>14-Day Phased Plan</h2>
+    <p class="section-desc">Ship value incrementally. Cleanup first, then Templates, then Observation, then Patterns. Each phase is independently useful.</p>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 0 &mdash; Day 0 (Pre-work)</div>
+        <div class="timeline-title">Osiris Cleanup</div>
+        <div class="timeline-desc">Delete 4 dead pipeline scripts + som-refine.js. Remove 15 dead endpoints, 5 delta MCP tools, 3 collections. Simplify emotional scores and similarity presets. Estimated ~1,800 LOC removed.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">delete synthesizer.js</span>
+          <span class="timeline-tag">delete brief-generator.js</span>
+          <span class="timeline-tag">delete pattern-extractor.js</span>
+          <span class="timeline-tag">delete audit.js</span>
+          <span class="timeline-tag">delete som-refine.js</span>
+          <span class="timeline-tag">drop 3 collections</span>
+          <span class="timeline-tag">remove 5 MCP tools</span>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 1 &mdash; Days 1-3</div>
+        <div class="timeline-title">Golden Templates</div>
+        <div class="timeline-desc">Mongoose schema + indexes for golden_templates. All 5 new MCP tools. BuildManifest in Rex. Template-first orchestration prompt for Claude. End-to-end: save + retrieve + build-from-template.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">golden_templates schema</span>
+          <span class="timeline-tag">save_golden_template</span>
+          <span class="timeline-tag">find_template + scoring</span>
+          <span class="timeline-tag">get_template</span>
+          <span class="timeline-tag">list_templates</span>
+          <span class="timeline-tag">deprecate_template</span>
+          <span class="timeline-tag">BuildManifest</span>
+          <span class="timeline-tag">content slot detection</span>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 2 &mdash; Days 4-6</div>
+        <div class="timeline-title">Passive Observer</div>
+        <div class="timeline-desc">documentchange listener in plugin, change buffer, observation window lifecycle, structural clustering. Refinement recorder assembles records in the server. Data accumulates silently.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">plugin/observer.ts (~150 LOC)</span>
+          <span class="timeline-tag">observation window</span>
+          <span class="timeline-tag">structural clustering</span>
+          <span class="timeline-tag">refinement/recorder.ts</span>
+          <span class="timeline-tag">refinement_records collection</span>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 3 &mdash; Days 7-11</div>
+        <div class="timeline-title">Adversarial Filter + Patterns</div>
+        <div class="timeline-desc">6-category change classifier (diagnostic-only first, then gating). Pattern extraction with confidence scoring. Pattern applicator for no-template builds. Override detection via BuildManifest. Cross-role generalization with role taxonomy (~40 entries).</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">refinement/filter.ts</span>
+          <span class="timeline-tag">6 change categories</span>
+          <span class="timeline-tag">refinement/patterns.ts</span>
+          <span class="timeline-tag">confidence scoring</span>
+          <span class="timeline-tag">refinement/applicator.ts</span>
+          <span class="timeline-tag">override detection</span>
+          <span class="timeline-tag">cross-role generalization</span>
+          <span class="timeline-tag">property_patterns collection</span>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 4 &mdash; Days 12-14</div>
+        <div class="timeline-title">Polish + Integration</div>
+        <div class="timeline-desc">Pattern recall via memory tools. Backfill existing 5 before/after pairs through the pipeline. Batch template import for existing Figma screens. End-to-end testing across 3 brands. Style propagation detection.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">pattern recall</span>
+          <span class="timeline-tag">backfill pipeline</span>
+          <span class="timeline-tag">batch template import</span>
+          <span class="timeline-tag">3-brand E2E test</span>
+          <span class="timeline-tag">style propagation</span>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 5 &mdash; Ongoing</div>
+        <div class="timeline-title">Maturation</div>
+        <div class="timeline-desc">Structural pattern support. Screenshot-as-index for cold-start acceleration. Content fingerprinting fallback. Learning dashboard. Template deduplication and merge suggestions.</div>
+        <div class="timeline-items">
+          <span class="timeline-tag">structural patterns</span>
+          <span class="timeline-tag">screenshot cold-start</span>
+          <span class="timeline-tag">content fingerprint</span>
+          <span class="timeline-tag">learning dashboard</span>
+          <span class="timeline-tag">template deduplication</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ SUCCESS METRICS ════════ -->
+<section id="metrics" style="border-bottom:none">
+  <div class="container">
+    <div class="section-label">Part 7 &mdash; Success Metrics</div>
+    <h2>Projected Outcomes</h2>
+    <p class="section-desc">The system bootstraps from the first session. After 2 weeks, 40-60% of builds hit a template. After 3 months, the designer has forgotten the system is learning.</p>
+
+    <div class="metric-grid">
+      <div class="metric-card">
+        <div class="metric-card-label">Template Hit Rate</div>
+        <div class="metric-card-value" style="color:var(--green)">80-95%</div>
+        <div class="metric-card-sub">After 3 months (0% at cold start)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-label">Avg Refinement Changes</div>
+        <div class="metric-card-value" style="color:var(--accent-bright)">2-3</div>
+        <div class="metric-card-sub">Down from 15-20 at cold start</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-label">Refinement Time</div>
+        <div class="metric-card-value" style="color:var(--blue)">45s</div>
+        <div class="metric-card-sub">Down from 4 min at cold start</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-label">Filter Rejection Rate</div>
+        <div class="metric-card-value" style="color:var(--amber)">~50%</div>
+        <div class="metric-card-sub">Consistent across maturity levels</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-label">Templates per Brand</div>
+        <div class="metric-card-value" style="color:var(--green)">20+</div>
+        <div class="metric-card-sub">After 3 months (8-15 after 2 weeks)</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-card-label">Confirmed Patterns</div>
+        <div class="metric-card-value" style="color:var(--cyan)">10-15</div>
+        <div class="metric-card-sub">Per brand after 3 months</div>
+      </div>
+    </div>
+
+    <!-- Verdict -->
+    <div class="verdict">
+      <h3>Clean first, build on a solid foundation. Templates on Day 1. Passive learning by Day 6. Full intelligence by Day 14.</h3>
+      <p style="color:var(--text-dim);font-size:15px;line-height:1.7;max-width:700px">Osiris drops from 1,479 LOC to ~900. Three dead collections become three purpose-built ones. Five broken tools become five that actually work. Then Rex ships a refinement learning system that captures 100% of design intent through templates and fills the gaps with passively learned property patterns.</p>
+
+      <div class="verdict-grid">
+        <div class="verdict-col now">
+          <h4>Ships in 14 Days</h4>
+          <ul>
+            <li>~1,800 LOC of dead code removed from Osiris</li>
+            <li>Golden Templates with versioned supersession chains</li>
+            <li>Template-first build workflow with content slot population</li>
+            <li>Silent edit observation via documentchange</li>
+            <li>Adversarial filter rejects ~50% of observations as noise</li>
+            <li>Recurring patterns auto-promoted and applied</li>
+            <li>Self-corrects when designer overrides pattern-applied values</li>
+          </ul>
+        </div>
+        <div class="verdict-col later">
+          <h4>After 3 Months</h4>
+          <ul>
+            <li>20+ templates per brand covering common screen types</li>
+            <li>10-15 confirmed property patterns per brand</li>
+            <li>80-95% template hit rate on build requests</li>
+            <li>Refinement time dropped from 4 min to 45 seconds</li>
+            <li>Pattern false positive rate below 5%</li>
+            <li>The designer has forgotten the system is learning</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Rex Integrated Spec &mdash; Osiris Cleanup + Refinement Learning System &middot; March 21, 2026
+  </div>
+</footer>
+
+</body>
+</html>

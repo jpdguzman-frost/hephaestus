@@ -1807,6 +1807,661 @@
     };
   }
 
+  // plugin/executors/som-extractor.ts
+  var NAME_PATTERNS = [
+    // Structure
+    { pattern: /(^|\b)(nav|nav-bar|header|top-bar|navigation)($|\b)/i, role: "nav", category: "structure" },
+    { pattern: /(^|\b)(bottom-nav|tab-bar|footer-nav)($|\b)/i, role: "bottom-nav", category: "structure" },
+    { pattern: /(^|\b)(status-bar|system-bar)($|\b)/i, role: "status-bar", category: "structure" },
+    { pattern: /(^|\b)(tabs|segment|switcher)($|\b)/i, role: "tab-bar", category: "structure" },
+    // Hero
+    { pattern: /(^|\b)(hero|gradient-header|banner-hero|hero-section)($|\b)/i, role: "hero", category: "hero" },
+    { pattern: /(^|\b)(carousel|slider|stories)($|\b)/i, role: "carousel", category: "hero" },
+    // Content
+    { pattern: /(^|\b)card(-|$)/i, role: "card", category: "content" },
+    { pattern: /(^|\b)section($|\b)|-section$/i, role: "section", category: "content" },
+    { pattern: /(^|\b)row($|\b)/i, role: "row", category: "content" },
+    { pattern: /^list$/i, role: "list", category: "content" },
+    { pattern: /(^|\b)(list-item|action-)($|\b)/i, role: "list-item", category: "content" },
+    // Interactive
+    { pattern: /(^|\b)(cta|cta-button)($|\b)|-btn$/i, role: "cta", category: "interactive" },
+    { pattern: /(^|\b)(input|search-bar|text-field|amount-)($|\b)/i, role: "input", category: "interactive" },
+    { pattern: /(^|\b)(toggle|switch)($|\b)/i, role: "toggle", category: "interactive" },
+    // Decorative
+    { pattern: /(^|\b)(divider|separator)($|\b)/i, role: "divider", category: "decorative" },
+    { pattern: /(^|\b)(pill|chip|badge|tag)($|\b)/i, role: "pill", category: "decorative" },
+    { pattern: /(^|\b)icon($|\b)/i, role: "icon", category: "decorative" },
+    { pattern: /(^|\b)(avatar|profile-pic)($|\b)/i, role: "avatar", category: "decorative" },
+    // Feedback
+    { pattern: /(^|\b)(banner|alert|notification)($|\b)|^verify-/i, role: "banner", category: "feedback" },
+    { pattern: /(^|\b)(modal|dialog|popup)($|\b)/i, role: "modal", category: "feedback" },
+    { pattern: /(^|\b)(progress|stepper|step-)($|\b)/i, role: "progress", category: "feedback" },
+    // Data
+    { pattern: /(^|\b)label($|\b)|-label$/i, role: "label", category: "data" },
+    { pattern: /(^|\b)(value)($|\b)|(-value|amount-|balance-)$/i, role: "value", category: "data" },
+    { pattern: /(^|\b)(prompt|body)($|\b)/i, role: "prompt", category: "data" }
+  ];
+  function determineTextRole(textNode) {
+    const name = textNode.name.toLowerCase();
+    if (name.includes("prompt") || name.includes("body") || name.includes("description")) {
+      return "prompt";
+    }
+    if (name.includes("value") || name.includes("amount") || name.includes("balance") || name.includes("price")) {
+      return "value";
+    }
+    if (name.includes("label") || name.includes("title") || name.includes("heading")) {
+      return "label";
+    }
+    const fontName = textNode.fontName;
+    if (fontName !== figma.mixed) {
+      const weight = getWeightFromStyle(fontName.style);
+      if (weight >= 600) return "value";
+    }
+    return "label";
+  }
+  function assignRole(node) {
+    const name = node.name.toLowerCase();
+    for (const p of NAME_PATTERNS) {
+      if (p.pattern.test(name)) {
+        return { role: p.role, roleCategory: p.category, confidence: 0.9 };
+      }
+    }
+    if (node.type === "ELLIPSE") {
+      return { role: "avatar", roleCategory: "decorative", confidence: 0.6 };
+    }
+    if (node.type === "TEXT") {
+      const role = determineTextRole(node);
+      return { role, roleCategory: "data", confidence: 0.5 };
+    }
+    if (node.type === "LINE") {
+      return { role: "divider", roleCategory: "decorative", confidence: 0.8 };
+    }
+    if (node.parent && "height" in node.parent) {
+      const parentHeight = node.parent.height;
+      if (parentHeight - node.y - node.height < 100 && node.height < 100) {
+        return { role: "bottom-nav", roleCategory: "structure", confidence: 0.4 };
+      }
+      if (node.y < 80 && node.height < 80) {
+        return { role: "nav", roleCategory: "structure", confidence: 0.4 };
+      }
+    }
+    if ("fills" in node) {
+      const fills = node.fills;
+      if (fills !== figma.mixed) {
+        for (const fill of fills) {
+          if (fill.type === "GRADIENT_LINEAR" || fill.type === "GRADIENT_RADIAL") {
+            return { role: "hero", roleCategory: "hero", confidence: 0.5 };
+          }
+        }
+      }
+    }
+    if ("children" in node && node.children.length > 0) {
+      return { role: "section", roleCategory: "content", confidence: 0.3 };
+    }
+    return { role: "unknown", roleCategory: "unknown", confidence: 0 };
+  }
+  function extractContent(node) {
+    const content = {};
+    if (node.type === "TEXT") {
+      const textNode = node;
+      content.texts = [{ value: textNode.characters, role: determineTextRole(textNode) }];
+    }
+    if ("children" in node) {
+      const children = node.children;
+      const texts = [];
+      for (const child of children) {
+        if (child.type === "TEXT") {
+          const textNode = child;
+          texts.push({ value: textNode.characters, role: determineTextRole(textNode) });
+        }
+      }
+      if (texts.length > 0) content.texts = texts;
+    }
+    if ("fills" in node) {
+      const fills = node.fills;
+      if (fills !== figma.mixed) {
+        const images = [];
+        for (const fill of fills) {
+          if (fill.type === "IMAGE") {
+            const imgPaint = fill;
+            if (imgPaint.imageHash) images.push(imgPaint.imageHash);
+          }
+        }
+        if (images.length > 0) content.images = images;
+      }
+    }
+    if (node.type === "INSTANCE") {
+      const instance = node;
+      if (instance.mainComponent) {
+        content.componentRef = instance.mainComponent.key;
+      }
+    }
+    return content;
+  }
+  function extractStyle(node) {
+    const style = {
+      w: Math.round(node.width),
+      h: Math.round(node.height)
+    };
+    if ("fills" in node) {
+      const fills = node.fills;
+      if (fills !== figma.mixed && fills.length > 0) {
+        const visibleFills = fills.filter((f) => f.visible !== false);
+        if (visibleFills.length === 1 && visibleFills[0].type === "SOLID") {
+          const solid = visibleFills[0];
+          style.fill = colorToHex(solid.color, solid.opacity);
+        } else if (visibleFills.length > 0) {
+          style.fills = serializePaints(visibleFills);
+        }
+      }
+    }
+    if ("strokes" in node) {
+      const strokes = node.strokes;
+      const serializedStrokes = serializePaints(strokes);
+      if (serializedStrokes.length > 0) {
+        style.strokes = serializedStrokes;
+        if ("strokeWeight" in node) {
+          const sw = node.strokeWeight;
+          if (sw !== figma.mixed) style.strokeWeight = sw;
+        }
+      }
+    }
+    if ("effects" in node) {
+      const effects = node.effects;
+      if (effects.length > 0) {
+        style.effects = serializeEffects(effects);
+      }
+    }
+    if (node.opacity !== 1) {
+      style.opacity = Math.round(node.opacity * 100) / 100;
+    }
+    if ("cornerRadius" in node) {
+      const cr = node.cornerRadius;
+      if (cr !== figma.mixed) {
+        if (cr !== 0) style.cornerRadius = cr;
+      } else {
+        const rn = node;
+        const tl = rn.topLeftRadius, tr = rn.topRightRadius;
+        const br = rn.bottomRightRadius, bl = rn.bottomLeftRadius;
+        if (tl !== 0 || tr !== 0 || br !== 0 || bl !== 0) {
+          if (tl === tr && tr === br && br === bl) {
+            style.cornerRadius = tl;
+          } else {
+            style.cornerRadius = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
+          }
+        }
+      }
+    }
+    if ("layoutMode" in node) {
+      const frame = node;
+      if (frame.layoutMode !== "NONE") {
+        style.layout = frame.layoutMode;
+        style.gap = frame.itemSpacing;
+        style.primaryAxisAlign = frame.primaryAxisAlignItems;
+        style.counterAxisAlign = frame.counterAxisAlignItems;
+        style.primaryAxisSizing = frame.primaryAxisSizingMode === "AUTO" ? "hug" : "fixed";
+        style.counterAxisSizing = frame.counterAxisSizingMode === "AUTO" ? "hug" : "fixed";
+        const pt = frame.paddingTop, pr = frame.paddingRight;
+        const pb = frame.paddingBottom, pl = frame.paddingLeft;
+        if (pt === pr && pr === pb && pb === pl) {
+          style.padding = pt;
+        } else {
+          style.padding = { top: pt, right: pr, bottom: pb, left: pl };
+        }
+      }
+    }
+    if ("clipsContent" in node) {
+      style.clipsContent = node.clipsContent;
+    }
+    if ("blendMode" in node) {
+      const bm = node.blendMode;
+      if (bm !== "NORMAL" && bm !== "PASS_THROUGH") {
+        style.blendMode = bm;
+      }
+    }
+    if (node.type === "TEXT") {
+      const textStyle = serializeTextStyle(node);
+      if (textStyle) {
+        if (textStyle.fontSize) style.fontSize = textStyle.fontSize;
+        if (textStyle.fontFamily) style.fontFamily = textStyle.fontFamily;
+        if (textStyle.fontWeight) style.fontWeight = textStyle.fontWeight;
+        if (textStyle.textAlignHorizontal) style.textAlign = textStyle.textAlignHorizontal;
+        if (textStyle.letterSpacing) style.letterSpacing = textStyle.letterSpacing;
+        if (textStyle.lineHeight) style.lineHeight = textStyle.lineHeight;
+      }
+    }
+    return style;
+  }
+  var MAX_CHILDREN = 100;
+  function walkNode(node, depth, maxDepth, doAssignRoles, roleMap) {
+    const roleResult = doAssignRoles ? assignRole(node) : { role: "unknown", roleCategory: "unknown", confidence: 0 };
+    const somNode = {
+      id: node.id,
+      name: node.name,
+      type: node.type,
+      role: roleResult.role,
+      roleCategory: roleResult.roleCategory,
+      confidence: roleResult.confidence,
+      content: extractContent(node),
+      style: extractStyle(node)
+    };
+    roleMap.push({
+      nodeId: node.id,
+      nodeName: node.name,
+      role: roleResult.role,
+      category: roleResult.roleCategory,
+      confidence: roleResult.confidence
+    });
+    if (depth < maxDepth && "children" in node) {
+      const parent = node;
+      const childCount = Math.min(parent.children.length, MAX_CHILDREN);
+      const children = [];
+      for (let i = 0; i < childCount; i++) {
+        children.push(walkNode(parent.children[i], depth + 1, maxDepth, doAssignRoles, roleMap));
+      }
+      if (children.length > 0) {
+        somNode.children = children;
+      }
+      if (parent.children.length > MAX_CHILDREN) {
+        somNode._childrenTruncated = true;
+        somNode._totalChildren = parent.children.length;
+      }
+    }
+    return somNode;
+  }
+  async function executeExtractSom(payload2) {
+    const nodeId = payload2.nodeId;
+    const screenType = payload2.screenType || "unknown";
+    const platform = payload2.platform || "unknown";
+    const maxDepth = payload2.depth || 10;
+    const doAssignRoles = payload2.assignRoles !== false;
+    const node = figma.getNodeById(nodeId);
+    if (!node) {
+      throw new Error("Node " + nodeId + " not found");
+    }
+    const roleMap = [];
+    const root = walkNode(node, 0, maxDepth, doAssignRoles, roleMap);
+    root.role = "screen";
+    root.roleCategory = "structure";
+    root.confidence = 1;
+    roleMap[0].role = "screen";
+    roleMap[0].category = "structure";
+    roleMap[0].confidence = 1;
+    const unknownNodes = [];
+    let rolesAssigned = 0;
+    let confidenceSum = 0;
+    for (const entry of roleMap) {
+      if (entry.role === "unknown") {
+        unknownNodes.push(entry.nodeName);
+      } else {
+        rolesAssigned++;
+      }
+      confidenceSum += entry.confidence;
+    }
+    const totalNodes = roleMap.length;
+    const overallConfidence = totalNodes > 0 ? Math.round(confidenceSum / totalNodes * 100) / 100 : 0;
+    return {
+      som: {
+        version: 2,
+        platform,
+        screenType,
+        referenceFrame: {
+          width: Math.round(node.width),
+          height: Math.round(node.height)
+        },
+        root
+      },
+      roleMap,
+      unknownNodes,
+      stats: {
+        totalNodes,
+        rolesAssigned,
+        unknownCount: unknownNodes.length,
+        overallConfidence
+      }
+    };
+  }
+
+  // plugin/build-manifest.ts
+  var OBSERVABLE_PROPS = [
+    "x",
+    "y",
+    "width",
+    "height",
+    "opacity",
+    "visible",
+    "fills",
+    "strokes",
+    "strokeWeight",
+    "cornerRadius",
+    "effects",
+    "clipsContent",
+    "layoutMode",
+    "primaryAxisAlignItems",
+    "counterAxisAlignItems",
+    "itemSpacing",
+    "paddingTop",
+    "paddingRight",
+    "paddingBottom",
+    "paddingLeft",
+    "layoutSizingHorizontal",
+    "layoutSizingVertical",
+    "fontSize",
+    "fontName",
+    "textAlignHorizontal"
+  ];
+  var OBSERVABLE_SET = new Set(OBSERVABLE_PROPS);
+  var BuildManifest = class {
+    constructor() {
+      this.entries = /* @__PURE__ */ new Map();
+      this.frameId = "";
+      this.brandId = "";
+      this.screenType = "";
+    }
+    addEntry(nodeId, role, name, parentRole, appliedValues) {
+      this.entries.set(nodeId, { role, name, parentRole, appliedValues });
+    }
+    isTracked(nodeId) {
+      return this.entries.has(nodeId);
+    }
+    getEntry(nodeId) {
+      return this.entries.get(nodeId);
+    }
+    get size() {
+      return this.entries.size;
+    }
+    clear() {
+      this.entries.clear();
+    }
+    /** Build manifest from an extract_som roleMap + live frame. */
+    buildFromSom(frameId, roleMap, brandId, screenType, templateId) {
+      this.clear();
+      this.frameId = frameId;
+      this.brandId = brandId;
+      this.screenType = screenType;
+      this.templateId = templateId;
+      for (const entry of roleMap) {
+        const node = figma.getNodeById(entry.nodeId);
+        if (!node) continue;
+        const snapshot = captureNodeValues(node);
+        this.addEntry(entry.nodeId, entry.role, entry.nodeName, "", snapshot);
+      }
+    }
+  };
+  function captureNodeValues(node) {
+    const vals = {};
+    for (const prop of OBSERVABLE_PROPS) {
+      vals[prop] = readNodeProperty(node, prop);
+    }
+    return vals;
+  }
+  function serializeFills(paints) {
+    const visible = paints.filter((p) => p.visible !== false);
+    if (visible.length === 0) return "";
+    if (visible.length === 1 && visible[0].type === "SOLID") {
+      const s = visible[0];
+      return colorToHex(s.color, s.opacity);
+    }
+    return JSON.stringify(serializePaints(visible));
+  }
+  var FLUSH_INTERVAL_MS = 3e4;
+  var IDLE_TIMEOUT_MS = 1e4;
+  var DocumentChangeObserver = class {
+    constructor() {
+      this.manifest = null;
+      this.changeBuffer = /* @__PURE__ */ new Map();
+      this.flushCallback = null;
+      this.flushTimer = null;
+      this.idleTimer = null;
+      this.startedAt = 0;
+      this.lastChangeTime = 0;
+    }
+    start(manifest, flushCallback) {
+      this.stop();
+      this.manifest = manifest;
+      this.flushCallback = flushCallback;
+      this.startedAt = Date.now();
+      this.lastChangeTime = 0;
+      this.changeBuffer.clear();
+      this.flushTimer = setInterval(() => {
+        this.flush();
+      }, FLUSH_INTERVAL_MS);
+      console.log("[Observer] Started watching " + manifest.size + " nodes on frame " + manifest.frameId);
+    }
+    stop() {
+      if (this.flushTimer) {
+        clearInterval(this.flushTimer);
+        this.flushTimer = null;
+      }
+      if (this.idleTimer) {
+        clearTimeout(this.idleTimer);
+        this.idleTimer = null;
+      }
+      if (this.changeBuffer.size > 0) this.flush();
+      this.manifest = null;
+      this.flushCallback = null;
+    }
+    get active() {
+      return this.manifest !== null;
+    }
+    handleDocumentChange(event) {
+      if (!this.manifest) return;
+      let foundRelevant = false;
+      for (const change of event.documentChanges) {
+        if (change.type !== "PROPERTY_CHANGE") continue;
+        if (!this.manifest.isTracked(change.id)) continue;
+        const node = figma.getNodeById(change.id);
+        if (!node) continue;
+        const entry = this.manifest.getEntry(change.id);
+        for (const prop of change.properties) {
+          if (!OBSERVABLE_SET.has(prop)) continue;
+          const currentValue = readNodeProperty(node, prop);
+          const originalValue = entry.appliedValues[prop];
+          const bufferKey = change.id + ":" + prop;
+          this.changeBuffer.set(bufferKey, {
+            nodeId: change.id,
+            role: entry.role,
+            name: entry.name,
+            property: prop,
+            from: originalValue,
+            to: currentValue
+          });
+          foundRelevant = true;
+        }
+      }
+      if (foundRelevant) {
+        this.lastChangeTime = Date.now();
+        if (this.idleTimer) clearTimeout(this.idleTimer);
+        this.idleTimer = setTimeout(() => {
+          this.flush();
+        }, IDLE_TIMEOUT_MS);
+      }
+    }
+    flush() {
+      if (!this.manifest || !this.flushCallback || this.changeBuffer.size === 0) return;
+      const changes = [];
+      for (const change of this.changeBuffer.values()) {
+        if (!valuesEqual(change.from, change.to)) {
+          changes.push(change);
+        }
+      }
+      this.changeBuffer.clear();
+      if (this.idleTimer) {
+        clearTimeout(this.idleTimer);
+        this.idleTimer = null;
+      }
+      if (changes.length === 0) {
+        console.log("[Observer] Flush skipped \u2014 all changes were net-zero");
+        return;
+      }
+      const batch = {
+        frameId: this.manifest.frameId,
+        brandId: this.manifest.brandId,
+        screenType: this.manifest.screenType,
+        templateId: this.manifest.templateId,
+        changes,
+        observationDuration: Date.now() - this.startedAt
+      };
+      console.log("[Observer] Flushing " + changes.length + " changes for frame " + this.manifest.frameId);
+      this.flushCallback(batch);
+    }
+  };
+  function readNodeProperty(node, prop) {
+    switch (prop) {
+      case "x":
+        return Math.round(node.x);
+      case "y":
+        return Math.round(node.y);
+      case "width":
+        return Math.round(node.width);
+      case "height":
+        return Math.round(node.height);
+      case "opacity":
+        return node.opacity;
+      case "visible":
+        return node.visible;
+      case "fills":
+        if ("fills" in node) {
+          const f = node.fills;
+          return f !== figma.mixed ? serializeFills(f) : "";
+        }
+        return "";
+      case "strokes":
+        if ("strokes" in node) return serializeFills(node.strokes);
+        return "";
+      case "strokeWeight":
+        if ("strokeWeight" in node) {
+          const sw = node.strokeWeight;
+          return sw !== figma.mixed ? sw : 1;
+        }
+        return 1;
+      case "cornerRadius":
+        if ("cornerRadius" in node) {
+          const cr = node.cornerRadius;
+          if (cr !== figma.mixed) return cr;
+          return {
+            topLeft: node.topLeftRadius,
+            topRight: node.topRightRadius,
+            bottomRight: node.bottomRightRadius,
+            bottomLeft: node.bottomLeftRadius
+          };
+        }
+        return 0;
+      case "effects":
+        if ("effects" in node) return node.effects.length;
+        return 0;
+      case "clipsContent":
+        if ("clipsContent" in node) return node.clipsContent;
+        return true;
+      case "layoutMode":
+        if ("layoutMode" in node) return node.layoutMode;
+        return "NONE";
+      case "itemSpacing":
+        if ("itemSpacing" in node) return node.itemSpacing;
+        return 0;
+      case "paddingTop":
+      case "paddingRight":
+      case "paddingBottom":
+      case "paddingLeft":
+        if (prop in node) return node[prop];
+        return 0;
+      case "primaryAxisAlignItems":
+        if ("primaryAxisAlignItems" in node) return node.primaryAxisAlignItems;
+        return "MIN";
+      case "counterAxisAlignItems":
+        if ("counterAxisAlignItems" in node) return node.counterAxisAlignItems;
+        return "MIN";
+      case "layoutSizingHorizontal":
+      case "layoutSizingVertical":
+        if (prop in node) return node[prop];
+        return "FIXED";
+      case "fontSize":
+        if (node.type === "TEXT") {
+          const fs = node.fontSize;
+          return fs !== figma.mixed ? fs : 0;
+        }
+        return 0;
+      case "fontName":
+        if (node.type === "TEXT") {
+          const fn = node.fontName;
+          return fn !== figma.mixed ? fn.family + " " + fn.style : "";
+        }
+        return "";
+      case "textAlignHorizontal":
+        if (node.type === "TEXT") return node.textAlignHorizontal;
+        return "LEFT";
+      default:
+        return void 0;
+    }
+  }
+  function valuesEqual(a, b) {
+    if (a === b) return true;
+    if (a == null && b == null) return true;
+    if (typeof a !== typeof b) return false;
+    if (typeof a === "object" && a !== null && b !== null) {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+    return false;
+  }
+  var activeManifest = null;
+  var registeredFlushCallback = null;
+  var observer = new DocumentChangeObserver();
+  function getObserver() {
+    return observer;
+  }
+  function setFlushCallback(cb) {
+    registeredFlushCallback = cb;
+  }
+  function getFlushCallback() {
+    return registeredFlushCallback;
+  }
+  function startObservation(manifest, flushCallback) {
+    activeManifest = manifest;
+    observer.start(manifest, flushCallback);
+  }
+  function stopObservation() {
+    observer.stop();
+    activeManifest = null;
+  }
+
+  // plugin/executors/observer.ts
+  async function executeTrackFrame(payload2) {
+    const nodeId = payload2.nodeId;
+    const brandId = payload2.brandId || "unknown";
+    const screenType = payload2.screenType || "unknown";
+    const templateId = payload2.templateId;
+    const node = figma.getNodeById(nodeId);
+    if (!node) throw new Error("Node " + nodeId + " not found");
+    if (node.type !== "FRAME" && node.type !== "COMPONENT" && node.type !== "INSTANCE") {
+      throw new Error("TRACK_FRAME requires a frame-like node, got " + node.type);
+    }
+    const flushCb = getFlushCallback();
+    if (!flushCb) {
+      throw new Error("Cannot track frame \u2014 no relay connection (flush callback not registered)");
+    }
+    if (getObserver().active) {
+      stopObservation();
+    }
+    const somResult = await executeExtractSom({
+      nodeId,
+      screenType,
+      platform: "mobile",
+      assignRoles: true,
+      depth: 20
+    });
+    const manifest = new BuildManifest();
+    manifest.buildFromSom(nodeId, somResult.roleMap, brandId, screenType, templateId);
+    startObservation(manifest, flushCb);
+    return {
+      tracked: true,
+      frameId: nodeId,
+      frameName: node.name,
+      brandId,
+      screenType,
+      nodeCount: manifest.size
+    };
+  }
+
   // plugin/executor.ts
   async function executeGetNode(payload2) {
     var _a;
@@ -2139,11 +2794,14 @@
     GET_STYLES: executeGetStyles,
     GET_VARIABLES: executeGetVariables,
     GET_COMPONENTS: executeGetComponents,
+    EXTRACT_SOM: executeExtractSom,
+    // Observation commands
+    TRACK_FRAME: executeTrackFrame,
     // Utility commands
     EXECUTE: executeExecute,
     PING: executePing
   };
-  var READ_COMMANDS = /* @__PURE__ */ new Set(["GET_NODE", "GET_SELECTION", "SEARCH_NODES", "SCREENSHOT", "PING", "GET_STYLES", "GET_VARIABLES", "GET_COMPONENTS"]);
+  var READ_COMMANDS = /* @__PURE__ */ new Set(["GET_NODE", "GET_SELECTION", "SEARCH_NODES", "SCREENSHOT", "PING", "GET_STYLES", "GET_VARIABLES", "GET_COMPONENTS", "EXTRACT_SOM"]);
   var Executor = class {
     constructor() {
       this.cache = new IdempotencyCache();
@@ -2451,6 +3109,9 @@
       this.shouldReconnect = true;
       this.reconnectAttempt = 0;
       this.statusCallback = null;
+      // Callbacks for connection state changes (used by poller to adapt polling rate)
+      this.onDegraded = null;
+      this.onReconnected = null;
       // Bounded send queue for messages while disconnected
       this.pendingQueue = [];
       this.MAX_QUEUE = 20;
@@ -2493,6 +3154,7 @@
             timestamp: Date.now()
           });
           this.notifyStatus(true);
+          if (this.onReconnected) this.onReconnected();
           break;
         case "ws-message":
           this.handleMessage(msg.data);
@@ -2501,6 +3163,7 @@
           console.log("WebSocket closed: " + msg.code + " " + msg.reason);
           this._isConnected = false;
           this.notifyStatus(false);
+          if (this.onDegraded) this.onDegraded();
           if (this.shouldReconnect) {
             this.scheduleReconnect();
           }
@@ -2578,14 +3241,6 @@
                   chatResp.message,
                   chatResp.isError || false
                 );
-              }
-              break;
-            }
-            if (message.id === "chat-listening" && payload2) {
-              if (payload2.listening === true) {
-                figma.ui.postMessage({ type: "chat-available" });
-              } else {
-                figma.ui.postMessage({ type: "chat-unavailable" });
               }
               break;
             }
@@ -2712,7 +3367,6 @@
   function httpRequest(method, url, body, headers, timeout2) {
     return new Promise((resolve) => {
       const requestId = `req_${++requestCounter}_${Date.now()}`;
-      pendingRequests.set(requestId, resolve);
       const timer = setTimeout(() => {
         if (pendingRequests.has(requestId)) {
           pendingRequests.delete(requestId);
@@ -2746,13 +3400,16 @@
       this.idleInterval = 500;
       this.idleThreshold = 1e4;
       this.lastCommandTime = 0;
-      // Chat listening state tracking
-      this.lastChatListening = false;
+      // Chat availability state tracking
+      this.chatAvailableEmitted = false;
+      // High-priority polling mode (burst rate when WS drops)
+      this.highPriority = false;
       // Connection health tracking
       this.consecutiveErrors = 0;
       this.maxConsecutiveErrors = 5;
       this.reconnecting = false;
       this.onReconnect = null;
+      this.onDisconnect = null;
       this.baseUrl = baseUrl;
       this.executor = executor;
       this.pluginId = "heph_" + generateId();
@@ -2769,6 +3426,10 @@
     /** Send an authenticated POST request through the HTTP bridge. */
     async postAuthenticated(path, body) {
       return httpRequest("POST", this.baseUrl + path, body, this.getHeaders(), 5e3);
+    }
+    /** Send an authenticated GET request through the HTTP bridge. */
+    async getAuthenticated(path) {
+      return httpRequest("GET", this.baseUrl + path, void 0, this.getHeaders(), 5e3);
     }
     async connect() {
       try {
@@ -2834,14 +3495,46 @@
     setReconnectCallback(cb) {
       this.onReconnect = cb;
     }
+    /**
+     * Set a callback that fires when reconnect fails (connection lost).
+     */
+    setDisconnectCallback(cb) {
+      this.onDisconnect = cb;
+    }
     async startPolling() {
       if (this.polling) return;
       this.polling = true;
       this.consecutiveErrors = 0;
       this.poll();
     }
+    /**
+     * Switch to high-priority burst-rate polling (100ms).
+     * Used when WebSocket drops to ensure commands are picked up via HTTP.
+     */
+    setHighPriorityMode(enabled) {
+      this.highPriority = enabled;
+      if (enabled) {
+        console.log("Poller: high-priority mode ON (WS degraded, polling at burst rate)");
+        this.forceImmediatePoll();
+      } else {
+        console.log("Poller: high-priority mode OFF (WS restored)");
+      }
+    }
+    /**
+     * Force an immediate poll cycle, bypassing any pending timer.
+     */
+    forceImmediatePoll() {
+      if (!this.polling) return;
+      if (this.pollTimer) {
+        clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+      }
+      this.poll();
+    }
     async disconnect() {
       this.polling = false;
+      this.chatAvailableEmitted = false;
+      figma.ui.postMessage({ type: "chat-unavailable" });
       if (this.pollTimer) {
         clearTimeout(this.pollTimer);
         this.pollTimer = null;
@@ -2882,15 +3575,30 @@
           var serverQueueRemainder = data.queueDepth || 0;
           var localCommandCount = commands && commands.length ? commands.length : 0;
           figma.ui.postMessage({ type: "queue-update", count: serverQueueRemainder + localCommandCount });
-          var chatListeningNow = data.chatListening === true;
-          if (chatListeningNow !== this.lastChatListening) {
-            this.lastChatListening = chatListeningNow;
-            figma.ui.postMessage({ type: chatListeningNow ? "chat-available" : "chat-unavailable" });
+          if (!this.chatAvailableEmitted) {
+            this.chatAvailableEmitted = true;
+            figma.ui.postMessage({ type: "chat-available" });
+          }
+          var pendingChat = data.pendingChat || 0;
+          figma.ui.postMessage({ type: "pending-chat", count: pendingChat });
+          var sessionName = data.sessionName;
+          if (sessionName) {
+            figma.ui.postMessage({ type: "session-name-update", name: sessionName });
           }
           var chatResponses = data.chatResponses;
           if (chatResponses && chatResponses.length > 0) {
             for (var j = 0; j < chatResponses.length; j++) {
-              postChatResponseDeduped(chatResponses[j].id, chatResponses[j].message);
+              var cr = chatResponses[j];
+              if (cr._isChunk) {
+                figma.ui.postMessage({
+                  type: "chat-chunk",
+                  id: cr.id,
+                  delta: cr.message,
+                  done: cr._done || false
+                });
+              } else {
+                postChatResponseDeduped(cr.id, cr.message, cr.isError);
+              }
             }
           }
           if (commands && commands.length > 0) {
@@ -2898,7 +3606,8 @@
             nextInterval = this.burstInterval;
             var serverQueueDepth = data.queueDepth || 0;
             var keepAliveTimer = setInterval(() => {
-              httpRequest("GET", this.baseUrl + "/commands?keepalive=1", void 0, this.getHeaders(), 5e3).catch(function() {
+              httpRequest("GET", this.baseUrl + "/commands?keepalive=1", void 0, this.getHeaders(), 5e3).catch(function(e) {
+                console.warn("Keep-alive poll failed:", e);
               });
             }, 4e3);
             try {
@@ -2956,10 +3665,6 @@
           }
         } else if (resp.status >= 200 && resp.status < 300 && !resp.body) {
           this.consecutiveErrors = 0;
-          if (this.lastChatListening) {
-            this.lastChatListening = false;
-            figma.ui.postMessage({ type: "chat-unavailable" });
-          }
         } else if (resp.status === 503) {
           console.warn("Session lost (503), reconnecting immediately...");
           this.consecutiveErrors++;
@@ -3023,27 +3728,41 @@
     async attemptReconnect() {
       if (this.reconnecting) return;
       this.reconnecting = true;
-      console.log("Attempting reconnect...");
-      try {
-        var success = await this.connect();
-        if (success) {
-          console.log("Reconnected successfully. Session: " + this.sessionId);
-          this.consecutiveErrors = 0;
-          if (this.onReconnect) {
-            this.onReconnect();
+      var maxRetries = 3;
+      var backoff = [1e3, 3e3, 5e3];
+      for (var attempt = 0; attempt < maxRetries; attempt++) {
+        console.log("Attempting reconnect... (attempt " + (attempt + 1) + "/" + maxRetries + ")");
+        try {
+          var success = await this.connect();
+          if (success) {
+            console.log("Reconnected successfully. Session: " + this.sessionId);
+            this.consecutiveErrors = 0;
+            if (this.onReconnect) {
+              this.onReconnect();
+            }
+            this.reconnecting = false;
+            return;
           }
-        } else {
-          console.warn("Reconnect failed, will retry on next poll");
-          figma.ui.postMessage({ type: "status", connected: false, transport: null });
+        } catch (e) {
+          console.error("Reconnect error (attempt " + (attempt + 1) + "):", e);
         }
-      } catch (e) {
-        console.error("Reconnect error:", e);
-        figma.ui.postMessage({ type: "status", connected: false, transport: null });
-      } finally {
-        this.reconnecting = false;
+        if (attempt < maxRetries - 1) {
+          console.log("Reconnect failed, retrying in " + backoff[attempt] + "ms...");
+          figma.ui.postMessage({ type: "status", connected: false, transport: null });
+          await new Promise(function(resolve) {
+            setTimeout(resolve, backoff[attempt]);
+          });
+        }
       }
+      console.warn("Reconnect failed after " + maxRetries + " attempts, disconnecting");
+      figma.ui.postMessage({ type: "status", connected: false, transport: null });
+      if (this.onDisconnect) {
+        this.onDisconnect();
+      }
+      this.reconnecting = false;
     }
     getAdaptiveInterval() {
+      if (this.highPriority) return this.burstInterval;
       const timeSinceLastCommand = Date.now() - this.lastCommandTime;
       if (this.lastCommandTime > 0 && timeSinceLastCommand < 1e3) {
         return this.burstInterval;
@@ -3131,20 +3850,117 @@
   }
 
   // plugin/code.ts
-  var RELAY_URL = "http://localhost:7780";
   var pollerRef = null;
-  function reportStatus(transport) {
+  var wsRef = null;
+  var currentChannel = null;
+  var executorRef = null;
+  var currentSessionId = null;
+  var currentSessionName = null;
+  function reportStatus(transport, channel) {
     figma.ui.postMessage({
       type: "status",
       connected: transport !== "disconnected",
-      transport
+      transport,
+      port: channel
     });
   }
   async function main() {
-    figma.showUI(__html__, { visible: true, width: 360, height: 215 });
-    var executor = new Executor();
-    var ws = new WSClient(RELAY_URL, executor);
+    figma.showUI(__html__, { visible: true, width: 360, height: 286 });
+    executorRef = new Executor();
     setupHttpBridge();
+    figma.on("selectionchange", function() {
+      if (!pollerRef) return;
+      var sel = figma.currentPage.selection;
+      var items = [];
+      for (var i = 0; i < sel.length; i++) {
+        items.push({ id: sel[i].id, name: sel[i].name, type: sel[i].type });
+      }
+      figma.ui.postMessage({
+        type: "selection-changed",
+        count: items.length,
+        items: items.slice(0, 3)
+      });
+    });
+    figma.on("documentchange", function(event) {
+      const obs = getObserver();
+      if (obs.active) {
+        obs.handleDocumentChange(event);
+      }
+    });
+    preloadFonts().catch(function(e) {
+      console.warn("Font preload failed:", e);
+    });
+    var lastChannel = null;
+    try {
+      lastChannel = await figma.clientStorage.getAsync("rex-channel");
+    } catch (e) {
+    }
+    figma.ui.postMessage({
+      type: "channel-screen",
+      lastChannel
+    });
+  }
+  async function handleChannelSubmit(channel) {
+    var url = "http://localhost:" + channel;
+    try {
+      var resp = await httpRequest("GET", url + "/health", void 0, void 0, 3e3);
+      if (resp.status === 0 || !resp.body) {
+        figma.ui.postMessage({
+          type: "channel-error",
+          message: "Couldn't find a session on channel " + channel + ". Is Claude running?"
+        });
+        return;
+      }
+      var health = JSON.parse(resp.body);
+      var state = health && health.connection && health.connection.state;
+      currentChannel = channel;
+      try {
+        await figma.clientStorage.setAsync("rex-channel", channel);
+      } catch (e) {
+      }
+      await connectToRelay(url, channel);
+    } catch (e) {
+      figma.ui.postMessage({
+        type: "channel-error",
+        message: "Something went wrong trying to reach channel " + channel + ". Try again?"
+      });
+    }
+  }
+  async function handleChannelReconnect() {
+    if (!currentChannel) return;
+    await handleChannelSubmit(currentChannel);
+  }
+  function handleChannelChange() {
+    stopObservation();
+    if (wsRef) {
+      wsRef.disconnect();
+      wsRef = null;
+    }
+    if (pollerRef) {
+      pollerRef.disconnect();
+      pollerRef = null;
+    }
+    currentChannel = null;
+    figma.ui.resize(360, 286);
+    figma.clientStorage.getAsync("rex-channel").then(function(lastChannel) {
+      figma.ui.postMessage({
+        type: "channel-screen",
+        lastChannel
+      });
+    }).catch(function() {
+      figma.ui.postMessage({
+        type: "channel-screen",
+        lastChannel: null
+      });
+    });
+  }
+  async function connectToRelay(relayUrl, channel) {
+    if (wsRef) {
+      wsRef.disconnect();
+    }
+    var executor = executorRef;
+    var ws = new WSClient(relayUrl, executor);
+    wsRef = ws;
     var existingHandler = figma.ui.onmessage;
     figma.ui.onmessage = function(msg) {
       var message = msg;
@@ -3158,6 +3974,29 @@
       }
       if (message && message.type === "resize") {
         figma.ui.resize(message.width, message.height);
+        return;
+      }
+      if (message && message.type === "fetch-sessions") {
+        fetchAndSendSessions(poller);
+        return;
+      }
+      if (message && message.type === "session-create") {
+        handleSessionCreate();
+        return;
+      }
+      if (message && message.type === "session-select") {
+        handleSessionSelect(message.sessionId);
+        return;
+      }
+      if (message && message.type === "session-delete") {
+        handleSessionDelete(message.sessionId, poller);
+        return;
+      }
+      if (message && message.type === "cache-chat-history") {
+        var fileKey2 = figma.fileKey || "unknown";
+        var cacheKey = currentSessionId ? "rex-session-messages-" + fileKey2 + "-" + currentSessionId : "rex-chat-history-" + fileKey2;
+        figma.clientStorage.setAsync(cacheKey, message.messages).catch(function() {
+        });
         return;
       }
       if (message && message.type === "navigate-to-node") {
@@ -3175,38 +4014,41 @@
         existingHandler(msg);
       }
     };
-    figma.on("selectionchange", function() {
-      var sel = figma.currentPage.selection;
-      var items = [];
-      for (var i = 0; i < sel.length; i++) {
-        items.push({ id: sel[i].id, name: sel[i].name, type: sel[i].type });
-      }
-      figma.ui.postMessage({
-        type: "selection-changed",
-        count: items.length,
-        items: items.slice(0, 3)
-      });
-    });
-    preloadFonts().catch(function(e) {
-      console.warn("Font preload failed:", e);
-    });
-    var poller = new Poller(RELAY_URL, executor);
+    var poller = new Poller(relayUrl, executor);
     pollerRef = poller;
     var connected = await poller.connect();
     if (connected) {
       await poller.startPolling();
-      reportStatus("http");
-      var sessionId = poller.getSessionId();
-      if (sessionId) {
-        ws.setSessionId(sessionId);
-      }
-      var token = poller.getAuthToken();
-      if (token) {
-        ws.setAuthToken(token);
-      }
-      ws.onStatusChange(function(wsConnected) {
-        reportStatus(wsConnected ? "websocket" : "http");
+      figma.ui.postMessage({ type: "channel-connected", channel });
+      reportStatus("http", channel);
+      setFlushCallback(function(batch) {
+        poller.postAuthenticated("/observations", batch).catch(function(e) {
+          console.warn("[Observer] Failed to send observations:", e);
+        });
       });
+      try {
+        var fileKey = figma.fileKey || "unknown";
+        var lastSessionId = await figma.clientStorage.getAsync("rex-active-session-" + fileKey);
+        if (lastSessionId) {
+          currentSessionId = lastSessionId;
+          poller.postAuthenticated("/session/resume", { sessionId: lastSessionId }).catch(function() {
+          });
+        }
+      } catch (e) {
+      }
+      var sessionId = poller.getSessionId();
+      if (sessionId) ws.setSessionId(sessionId);
+      var token = poller.getAuthToken();
+      if (token) ws.setAuthToken(token);
+      ws.onStatusChange(function(wsConnected) {
+        reportStatus(wsConnected ? "websocket" : "http", channel);
+      });
+      ws.onDegraded = function() {
+        poller.setHighPriorityMode(true);
+      };
+      ws.onReconnected = function() {
+        poller.setHighPriorityMode(false);
+      };
       ws.connect();
       poller.setReconnectCallback(function() {
         var newSid = poller.getSessionId();
@@ -3215,51 +4057,111 @@
         if (newTok) ws.setAuthToken(newTok);
         ws.disconnect();
         ws.connect();
-        reportStatus("http");
+        reportStatus("http", channel);
+      });
+      poller.setDisconnectCallback(function() {
+        figma.ui.postMessage({
+          type: "channel-disconnected",
+          channel
+        });
       });
       figma.on("close", function() {
+        stopObservation();
         poller.disconnect();
         ws.disconnect();
       });
     } else {
-      reportStatus("disconnected");
-      var retryInterval = setInterval(async function() {
-        var retryConnected = await poller.connect();
-        if (retryConnected) {
-          clearInterval(retryInterval);
-          await poller.startPolling();
-          reportStatus("http");
-          var sid = poller.getSessionId();
-          if (sid) {
-            ws.setSessionId(sid);
-          }
-          var tok = poller.getAuthToken();
-          if (tok) {
-            ws.setAuthToken(tok);
-          }
-          ws.onStatusChange(function(wsConnected) {
-            reportStatus(wsConnected ? "websocket" : "http");
-          });
-          ws.connect();
-          poller.setReconnectCallback(function() {
-            var newSid = poller.getSessionId();
-            if (newSid) ws.setSessionId(newSid);
-            var newTok = poller.getAuthToken();
-            if (newTok) ws.setAuthToken(newTok);
-            ws.disconnect();
-            ws.connect();
-            reportStatus("http");
-          });
-          figma.on("close", function() {
-            poller.disconnect();
-            ws.disconnect();
-          });
-        }
-      }, 3e3);
-      figma.on("close", function() {
-        clearInterval(retryInterval);
-        poller.disconnect();
+      figma.ui.resize(360, 286);
+      figma.ui.postMessage({
+        type: "channel-error",
+        message: "Connected to channel " + channel + " but the handshake failed. Try again?"
       });
+    }
+  }
+  async function fetchAndSendSessions(poller) {
+    try {
+      var resp = await poller.getAuthenticated("/sessions");
+      if (resp.status >= 200 && resp.status < 300 && resp.body) {
+        var data = JSON.parse(resp.body);
+        figma.ui.postMessage({ type: "session-list", sessions: data.sessions || [] });
+      } else {
+        figma.ui.postMessage({ type: "session-list", sessions: [] });
+      }
+    } catch (e) {
+      console.warn("Failed to load sessions:", e);
+      figma.ui.postMessage({ type: "session-list", sessions: [] });
+    }
+  }
+  async function handleSessionCreate() {
+    if (!pollerRef) return;
+    try {
+      var resp = await pollerRef.postAuthenticated("/session/create", {});
+      if (resp.status >= 200 && resp.status < 300 && resp.body) {
+        var data = JSON.parse(resp.body);
+        var session = data.session;
+        if (session) {
+          currentSessionId = session.sessionId;
+          currentSessionName = session.name;
+          figma.clientStorage.setAsync("rex-active-session-" + (figma.fileKey || "unknown"), session.sessionId).catch(function() {
+          });
+          figma.ui.postMessage({ type: "session-created", session });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to create session:", e);
+    }
+  }
+  async function handleSessionSelect(sessionId) {
+    if (!pollerRef) return;
+    figma.ui.postMessage({ type: "session-loading" });
+    var fileKey = figma.fileKey || "unknown";
+    var cacheKey = "rex-session-messages-" + fileKey + "-" + sessionId;
+    try {
+      var cached = await figma.clientStorage.getAsync(cacheKey);
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        currentSessionId = sessionId;
+        currentSessionName = "Session";
+        figma.ui.postMessage({
+          type: "session-selected",
+          messages: cached,
+          sessionName: currentSessionName,
+          source: "cache"
+        });
+      }
+    } catch (e) {
+    }
+    try {
+      var resp = await pollerRef.postAuthenticated("/session/select", { sessionId });
+      if (resp.status >= 200 && resp.status < 300 && resp.body) {
+        var data = JSON.parse(resp.body);
+        currentSessionId = sessionId;
+        currentSessionName = data.sessionName || "Session";
+        figma.clientStorage.setAsync("rex-active-session-" + (figma.fileKey || "unknown"), sessionId).catch(function() {
+        });
+        var messages = data.messages || [];
+        figma.ui.postMessage({
+          type: "session-selected",
+          messages,
+          sessionName: currentSessionName,
+          source: "remote"
+        });
+        try {
+          await figma.clientStorage.setAsync(cacheKey, messages.slice(-50));
+        } catch (e) {
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to select session:", e);
+    }
+  }
+  async function handleSessionDelete(sessionId, poller) {
+    try {
+      var resp = await poller.postAuthenticated("/session/delete", { sessionId });
+      if (resp.status >= 200 && resp.status < 300) {
+        fetchAndSendSessions(poller);
+      }
+    } catch (e) {
+      console.warn("Failed to delete session:", e);
     }
   }
   function handleChatSend(msg) {
@@ -3284,22 +4186,7 @@
         constraint: { type: "WIDTH", value: 120 }
       };
       thumbnailPromise = targetNode.exportAsync(exportSettings).then(function(bytes) {
-        var binary = "";
-        for (var b = 0; b < bytes.length; b++) {
-          binary += String.fromCharCode(bytes[b]);
-        }
-        var base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        var result2 = "";
-        for (var bi = 0; bi < binary.length; bi += 3) {
-          var a1 = binary.charCodeAt(bi);
-          var a2 = bi + 1 < binary.length ? binary.charCodeAt(bi + 1) : 0;
-          var a3 = bi + 2 < binary.length ? binary.charCodeAt(bi + 2) : 0;
-          result2 += base64Chars[a1 >> 2];
-          result2 += base64Chars[(a1 & 3) << 4 | a2 >> 4];
-          result2 += bi + 1 < binary.length ? base64Chars[(a2 & 15) << 2 | a3 >> 6] : "=";
-          result2 += bi + 2 < binary.length ? base64Chars[a3 & 63] : "=";
-        }
-        return "data:image/png;base64," + result2;
+        return "data:image/png;base64," + uint8ArrayToBase64(bytes);
       }).catch(function() {
         return null;
       });
@@ -3336,6 +4223,21 @@
       });
     });
   }
+  figma.ui.onmessage = function(msg) {
+    var message = msg;
+    if (message && message.type === "channel-submit") {
+      handleChannelSubmit(message.channel);
+      return;
+    }
+    if (message && message.type === "channel-reconnect") {
+      handleChannelReconnect();
+      return;
+    }
+    if (message && message.type === "channel-change") {
+      handleChannelChange();
+      return;
+    }
+  };
   main().catch(function(e) {
     console.error("Rex init failed:", e);
   });

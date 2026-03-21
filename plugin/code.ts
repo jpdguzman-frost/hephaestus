@@ -10,6 +10,7 @@ import { Poller, setupHttpBridge, httpRequestRaw } from "./poller";
 import { WSClient } from "./ws-client";
 import { Executor, uint8ArrayToBase64 } from "./executor";
 import { preloadFonts } from "./fonts";
+import { getObserver, stopObservation, setFlushCallback, type ObservationBatch } from "./build-manifest";
 
 type TransportStatus = "websocket" | "http" | "disconnected";
 
@@ -55,6 +56,14 @@ async function main(): Promise<void> {
       count: items.length,
       items: items.slice(0, 3)
     });
+  });
+
+  // Listen for document changes (for refinement observation)
+  figma.on("documentchange", function(event: DocumentChangeEvent) {
+    const obs = getObserver();
+    if (obs.active) {
+      obs.handleDocumentChange(event);
+    }
   });
 
   // Pre-load common fonts (non-blocking for startup)
@@ -119,6 +128,9 @@ async function handleChannelReconnect(): Promise<void> {
 }
 
 function handleChannelChange(): void {
+  // Stop any active observation
+  stopObservation();
+
   // Clean up existing connection
   if (wsRef) {
     wsRef.disconnect();
@@ -233,6 +245,13 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
     // Status screen shows automatically via showConnectedUI.
     // Session picker is triggered when user clicks "Talk Now".
 
+    // Register observation flush callback — sends batched refinement data to relay
+    setFlushCallback(function(batch: ObservationBatch) {
+      poller.postAuthenticated("/observations", batch).catch(function(e: unknown) {
+        console.warn("[Observer] Failed to send observations:", e);
+      });
+    });
+
     // Resume last active session so messages sent before user selects a session are still tagged
     try {
       var fileKey = figma.fileKey || "unknown";
@@ -282,6 +301,7 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
     });
 
     figma.on("close", function() {
+      stopObservation();
       poller.disconnect();
       ws.disconnect();
     });

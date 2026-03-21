@@ -17,6 +17,8 @@ import { CommentWatcher } from "./comment-watcher.js";
 import { MemoryServiceClient } from "../memory/client.js";
 import { loadMemoryConfig } from "../memory/config.js";
 import type { MemoryConfig, ChatHistoryEntry, ChatSession, MemoryContext } from "../memory/types.js";
+import { OsirisClient } from "./osiris-client.js";
+import type { RefinementRecord } from "./osiris-client.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +73,9 @@ export class RelayServer {
   // Memory system
   private readonly memoryConfig: MemoryConfig;
   private _memoryStore: MemoryServiceClient | null = null;
+
+  // Osiris client for refinement observations
+  private readonly osirisClient: OsirisClient;
 
   // Stream accumulator for persisting complete streaming responses
   private streamAccumulator: Map<string, string> = new Map();
@@ -135,6 +140,10 @@ export class RelayServer {
 
     // Load memory configuration
     this.memoryConfig = loadMemoryConfig();
+
+    // Initialize Osiris client for refinement observations
+    const osirisUrl = process.env.OSIRIS_URL || "https://aux.frostdesigngroup.com/osiris";
+    this.osirisClient = new OsirisClient(osirisUrl, this.logger);
 
     this.wireQueueEvents();
   }
@@ -650,6 +659,52 @@ export class RelayServer {
       preHandler: authHook,
     }, async (req: FastifyRequest, reply: FastifyReply) => {
       return this.handleDisconnect(req, reply);
+    });
+
+    // POST /observations — plugin sends batched refinement observations
+    app.post("/observations", {
+      preHandler: authHook,
+    }, async (req: FastifyRequest, _reply: FastifyReply) => {
+      const batch = req.body as {
+        frameId?: string;
+        brandId?: string;
+        screenType?: string;
+        templateId?: string;
+        changes?: Array<{ nodeId: string; role: string; name: string; property: string; from: unknown; to: unknown }>;
+        observationDuration?: number;
+      };
+      if (!batch?.frameId || !batch?.changes?.length) {
+        return { error: "Invalid observation batch" };
+      }
+
+      const session = this.connection.session;
+      const record: RefinementRecord = {
+        sessionId: session?.sessionId,
+        brandId: batch.brandId || "unknown",
+        screenType: batch.screenType || "unknown",
+        frameId: batch.frameId,
+        templateId: batch.templateId,
+        changes: batch.changes,
+        observationDuration: batch.observationDuration || 0,
+        changeCount: batch.changes.length,
+        fileKey: session?.fileKey,
+        user: session?.user ? { id: session.user.id, name: session.user.name } : undefined,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Forward to Osiris (fire-and-forget)
+      this.osirisClient.saveRefinementRecord(record).catch((err) => {
+        this.logger.warn("Failed to forward refinement record", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
+      this.logger.info("Observation batch received", {
+        frameId: batch.frameId,
+        changeCount: record.changeCount,
+      });
+
+      return { status: "ok", changeCount: record.changeCount };
     });
 
     // POST /chat/send — plugin sends a chat message

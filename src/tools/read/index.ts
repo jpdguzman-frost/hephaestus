@@ -10,7 +10,6 @@ export { getNode } from "./get-node.js";
 export { getSelection } from "./get-selection.js";
 export { getPage } from "./get-page.js";
 export { searchNodes } from "./search.js";
-export { screenshot } from "./screenshot.js";
 export { getStyles } from "./get-styles.js";
 export { getVariables } from "./get-variables.js";
 export { getComponents } from "./get-components.js";

@@ -2575,7 +2575,8 @@
         div.appendChild(labelEl);
         var contentEl = document.createElement("div");
         contentEl.className = "msg-content";
-        contentEl.innerHTML = renderMarkdown(entry.message || "");
+        var rendered = renderMarkdown(entry.message || "");
+        contentEl.innerHTML = rendered;
         div.appendChild(contentEl);
       } else {
         div.textContent = entry.message || "";

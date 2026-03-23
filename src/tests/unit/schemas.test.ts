@@ -4,7 +4,6 @@ import {
   getSelectionSchema,
   getPageSchema,
   searchNodesSchema,
-  screenshotSchema,
   getStylesSchema,
   getVariablesSchema,
   getComponentsSchema,
@@ -132,28 +131,6 @@ describe("Read tool schemas", () => {
 
     it("rejects invalid node type", () => {
       expect(searchNodesSchema.safeParse({ type: "INVALID" }).success).toBe(false);
-    });
-  });
-
-  describe("screenshotSchema", () => {
-    it("accepts empty object", () => {
-      expect(screenshotSchema.safeParse({}).success).toBe(true);
-    });
-
-    it("accepts valid format and scale", () => {
-      expect(screenshotSchema.safeParse({ format: "png", scale: 2 }).success).toBe(true);
-    });
-
-    it("rejects scale below minimum", () => {
-      expect(screenshotSchema.safeParse({ scale: 0.1 }).success).toBe(false);
-    });
-
-    it("rejects scale above maximum", () => {
-      expect(screenshotSchema.safeParse({ scale: 5 }).success).toBe(false);
-    });
-
-    it("rejects invalid format", () => {
-      expect(screenshotSchema.safeParse({ format: "gif" }).success).toBe(false);
     });
   });
 

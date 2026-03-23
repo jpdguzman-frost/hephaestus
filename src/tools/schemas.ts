@@ -374,16 +374,6 @@ export const searchNodesSchema = z.object({
   limit: z.number().optional(),
 });
 
-/** screenshot — scale accepts string or number, coerced to number */
-export const screenshotSchema = z.object({
-  nodeId: z.string().optional(),
-  format: z.enum(["png", "jpg", "svg"]).optional(),
-  scale: z.union([z.number(), z.string().transform(Number)])
-    .pipe(z.number().min(0.5).max(4))
-    .optional(),
-  maxDimension: z.number().min(100).max(4096).optional(),
-});
-
 /** get_styles */
 export const getStylesSchema = z.object({
   types: z.array(z.enum(["fill", "text", "effect", "grid"])).optional(),
@@ -931,7 +921,6 @@ export const schemaRegistry = {
   get_selection: getSelectionSchema,
   get_page: getPageSchema,
   search_nodes: searchNodesSchema,
-  screenshot: screenshotSchema,
   get_styles: getStylesSchema,
   get_variables: getVariablesSchema,
   get_components: getComponentsSchema,

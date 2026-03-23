@@ -252,13 +252,13 @@ async function connectToRelay(relayUrl: string, channel: number): Promise<void> 
       });
     });
 
-    // Resume last active session so messages sent before user selects a session are still tagged
+    // Resume last active session and load its history into the UI
     try {
       var fileKey = figma.fileKey || "unknown";
       var lastSessionId = await figma.clientStorage.getAsync("rex-active-session-" + fileKey) as string | null;
       if (lastSessionId) {
         currentSessionId = lastSessionId;
-        poller.postAuthenticated("/session/resume", { sessionId: lastSessionId }).catch(function() {});
+        handleSessionSelect(lastSessionId);
       }
     } catch (e) { /* ignore */ }
 
@@ -414,37 +414,6 @@ async function handleSessionDelete(sessionId: string, poller: Poller): Promise<v
   }
 }
 
-// ─── Chat History ─────────────────────────────────────────────────────
-
-async function loadChatHistory(poller: Poller): Promise<void> {
-  var fileKey = figma.fileKey || "unknown";
-  var cacheKey = "rex-chat-history-" + fileKey;
-
-  // Phase 1: Load local cache for instant rendering
-  try {
-    var cached = await figma.clientStorage.getAsync(cacheKey);
-    if (cached && Array.isArray(cached) && cached.length > 0) {
-      figma.ui.postMessage({ type: "chat-history", messages: cached, source: "cache" });
-    }
-  } catch (e) { /* ignore */ }
-
-  // Phase 2: Fetch remote history (non-blocking, replaces cache)
-  try {
-    var resp = await poller.getAuthenticated("/chat/history");
-    if (resp.status >= 200 && resp.status < 300 && resp.body) {
-      var data = JSON.parse(resp.body);
-      if (data.messages && data.messages.length > 0) {
-        figma.ui.postMessage({ type: "chat-history", messages: data.messages, source: "remote" });
-        // Update local cache with remote data
-        try {
-          await figma.clientStorage.setAsync(cacheKey, data.messages.slice(-20));
-        } catch (e) { /* non-critical */ }
-      }
-    }
-  } catch (e) {
-    console.warn("Failed to load remote chat history:", e);
-  }
-}
 
 // ─── Chat ──────────────────────────────────────────────────────────────
 

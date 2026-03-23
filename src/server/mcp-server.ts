@@ -47,8 +47,6 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     "Get page structure and metadata. Can return summary, standard, or full detail levels.",
   search_nodes:
     "Search for nodes by name, type, or properties. Supports scoping to a subtree.",
-  screenshot:
-    "Capture a screenshot of a node or the current page as PNG, JPG, or SVG. For large frames, use maxDimension (e.g. 1024) to auto-downscale and avoid timeout. Scale accepts 0.5-4.",
   get_styles:
     "Get all styles (fill, text, effect, grid) from the current file.",
   get_variables:

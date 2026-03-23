@@ -47,7 +47,6 @@ const TOOL_ROUTES: Record<string, ToolRoute> = {
   get_selection:  { category: "plugin", commandType: CommandType.GET_SELECTION },
   get_page:       { category: "plugin", commandType: CommandType.GET_NODE },      // Uses plugin for live data
   search_nodes:   { category: "plugin", commandType: CommandType.SEARCH_NODES },
-  screenshot:     { category: "plugin", commandType: CommandType.SCREENSHOT },
   get_styles:     { category: "plugin", commandType: CommandType.GET_STYLES, restFallback: true },
   get_variables:  { category: "plugin", commandType: CommandType.GET_VARIABLES, restFallback: true },
   get_components: { category: "plugin", commandType: CommandType.GET_COMPONENTS, restFallback: true },
